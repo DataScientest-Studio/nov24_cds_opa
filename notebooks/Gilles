@@ -1,1 +1,734 @@
 Gilles
+import yfinance as yf
+import pandas as pd
+import seaborn as sns
+import matplotlib.pyplot as plt
+import numpy as np
+
+# Liste des 10 plus grandes entreprises du Nasdaq
+nasdaq_top_10 = [
+    'AAPL', 'MSFT', 'GOOGL', 'AMZN', 'NVDA',
+    'META', 'TSLA', 'AVGO', 'PEP', 'COST'
+]
+
+# Téléchargement des données historiques
+def download_stock_data(tickers, start_date='2023-01-01', end_date='2024-12-31'):
+
+    """
+    Télécharge les données historiques des prix de clôture ajustés.
+
+    Returns:
+        pd.DataFrame: DataFrame avec les prix de clôture ajustés
+    """
+    # Téléchargement des données
+    data = yf.download(tickers, start=start_date, end=end_date)
+
+    # Extraction des prix de clôture ajustés
+    close_prices = data['Close']
+
+    return close_prices
+
+# Fonction pour créer et visualiser la matrice de corrélation
+def create_correlation_matrix(data):
+    """
+    Crée et visualise la matrice de corrélation des rendements.
+
+    Args:
+        data (pd.DataFrame): Données des prix de clôture
+
+    Returns:
+        pd.DataFrame: Matrice de corrélation
+    """
+    # Calcul des rendements quotidiens
+    returns = data.pct_change()
+
+    # Calcul de la matrice de corrélation
+    corr_matrix = returns.corr()
+
+    # Création de la visualisation
+    plt.figure(figsize=(12, 10))
+    sns.heatmap(corr_matrix, annot=True, cmap='coolwarm', center=0,
+                square=True, linewidths=0.5, cbar_kws={"shrink": .8},
+                fmt='.2f', vmin=-1, vmax=1)
+    plt.title('Matrice de Corrélation des Rendements', fontsize=12)
+    plt.tight_layout()
+    plt.savefig('correlation_matrix.png')
+    plt.close()
+
+    return corr_matrix
+
+# Analyse détaillée des corrélations
+def analyze_correlations(corr_matrix):
+    """
+    Analyse approfondie de la matrice de corrélation.
+
+    Args:
+        corr_matrix (pd.DataFrame): Matrice de corrélation
+    """
+    print("Analyse Détaillée des Corrélations\n")
+
+    # Transformer la matrice en série pour faciliter l'analyse
+    corr_series = corr_matrix.unstack()
+    corr_series = corr_series[corr_series != 1.0]
+
+    # Corrélations les plus fortes positives
+    print("Top 5 Corrélations Positives :")
+    top_positive = corr_series[corr_series > 0.5].nlargest(5)
+    print(top_positive)
+
+    # Corrélations les plus fortes négatives
+    print("\nTop 5 Corrélations Négatives :")
+    top_negative = corr_series[corr_series < -0.3].nsmallest(5)
+    print(top_negative)
+
+    # Statistiques descriptives
+    print("\nStatistiques des Corrélations :")
+    print(f"Moyenne : {corr_series.mean():.4f}")
+    print(f"Écart-type : {corr_series.std():.4f}")
+    print(f"Corrélation Maximale : {corr_series.max():.4f}")
+    print(f"Corrélation Minimale : {corr_series.min():.4f}")
+
+# Clustering hiérarchique
+def correlation_clustering(corr_matrix):
+    """
+    Réalise un clustering hiérarchique basé sur les corrélations.
+
+    Args:
+        corr_matrix (pd.DataFrame): Matrice de corrélation
+    """
+    from scipy.cluster import hierarchy
+
+    # Transformation de la matrice de distance
+    distance_matrix = 1 - np.abs(corr_matrix)
+
+    # Clustering hiérarchique
+    linkage = hierarchy.linkage(distance_matrix, method='ward')
+
+    # Visualisation du dendrogramme
+    plt.figure(figsize=(12, 8))
+    hierarchy.dendrogram(
+        linkage,
+        labels=corr_matrix.columns,
+        leaf_rotation=90,
+        leaf_font_size=8
+    )
+    plt.title('Clustering Hiérarchique des Entreprises du Nasdaq')
+    plt.xlabel('Entreprises')
+    plt.ylabel('Distance')
+    plt.tight_layout()
+    plt.savefig('nasdaq_correlation_clustering.png')
+    plt.close()
+
+# Exécution complète de l'analyse
+def main():
+    # Téléchargement des données
+    stock_data = download_stock_data(nasdaq_top_10)
+
+    # Création de la matrice de corrélation
+    correlation_matrix = create_correlation_matrix(stock_data)
+
+    # Analyse des corrélations
+    analyze_correlations(correlation_matrix)
+
+    # Clustering hiérarchique
+    correlation_clustering(correlation_matrix)
+
+# Exécution du script
+if __name__ == "__main__":
+    main()
+     
+  File "<ipython-input-18-cf565ed7b68d>", line 14
+    def download_stock_data(tickers, start_date='2023-01-01', end_date='2024-12-31')
+                                                                                    ^
+SyntaxError: expected ':'
+
+
+     
+
+import yfinance as yf
+import pandas as pd
+import matplotlib.pyplot as plt
+from statsmodels.tsa.seasonal import seasonal_decompose
+
+# Liste des 10 plus grandes entreprises du Nasdaq
+nasdaq_top_10 = [
+    'AAPL', 'MSFT', 'GOOGL', 'AMZN', 'NVDA',
+    'META', 'TSLA', 'AVGO', 'PEP', 'COST'
+]
+
+# Téléchargement des données historiques
+def download_stock_data(ticker, start_date='2022-01-01', end_date='2024-12-31'):
+    """
+    Télécharge les données historiques des prix de clôture pour un ticker.
+
+    Args:
+        ticker (str): Symbole boursier
+        start_date (str): Date de début
+        end_date (str): Date de fin
+
+    Returns:
+        pd.Series: Prix de clôture
+    """
+    # Téléchargement des données
+    data = yf.download(ticker, start=start_date, end=end_date)
+
+    # Retourne les prix de clôture
+    return data['Close']
+
+# Fonction de décomposition saisonnière
+def perform_seasonal_decomposition(stock_prices):
+    """
+    Réalise la décomposition saisonnière des prix d'une action.
+
+    Args:
+        stock_prices (pd.Series): Prix de clôture
+    """
+    # Décomposition saisonnière
+    # Période par défaut de 12 (pour données mensuelles)
+    # Ajuster si nécessaire selon la granularité des données
+    decomposition = seasonal_decompose(stock_prices, period=252)  # 252 jours ouvrables dans une année
+
+    # Création de la figure avec 4 sous-graphiques
+    plt.figure(figsize=(15, 10))
+
+    # Plot de la décomposition
+    decomposition.plot()
+
+    # Titre principal
+    plt.suptitle(f'Décomposition Saisonnière - {stock_prices.name}', fontsize=16)
+
+    # Ajustement de la mise en page
+    plt.tight_layout()
+
+    # Affichage du graphique
+    plt.show()
+
+    # Retourne l'objet de décomposition pour analyses supplémentaires
+    return decomposition
+
+# Fonction principale
+def main():
+    # Sélection d'un ticker (choix arbitraire)
+    ticker = 'AAPL'
+
+    # Téléchargement des données
+    stock_prices = download_stock_data(ticker)
+
+    # Nommer la série avec le ticker
+    stock_prices.name = ticker
+
+    # Décomposition saisonnière
+    decomposition = perform_seasonal_decomposition(stock_prices)
+
+    # Informations supplémentaires
+    print("\nInformations sur la Décomposition :")
+    print("Tendance (moyenne):", decomposition.trend.mean())
+    print("Saisonnalité (moyenne):", decomposition.seasonal.mean())
+    print("Résidus (moyenne):", decomposition.resid.mean())
+
+# Exécution du script
+if __name__ == "__main__":
+    main()
+     
+[*********************100%***********************]  1 of 1 completed
+<Figure size 1500x1000 with 0 Axes>
+
+Informations sur la Décomposition :
+Tendance (moyenne): 170.83123022276257
+Saisonnalité (moyenne): 0.057723054781098335
+Résidus (moyenne): -2.1542112352145746
+
+
+     
+
+import yfinance as yf
+import pandas as pd
+import matplotlib.pyplot as plt
+from statsmodels.tsa.seasonal import seasonal_decompose
+
+# Liste des 10 plus grandes entreprises du Nasdaq
+nasdaq_top_10 = [
+    'AAPL', 'MSFT', 'GOOGL', 'AMZN', 'NVDA',
+    'META', 'TSLA', 'AVGO', 'PEP', 'COST'
+]
+
+# Téléchargement des données historiques
+def download_stock_data(ticker, start_date='2022-01-01', end_date='2024-12-31'):
+    """
+    Télécharge les données historiques des prix de clôture pour un ticker.
+
+    Args:
+        ticker (str): Symbole boursier
+        start_date (str): Date de début
+        end_date (str): Date de fin
+
+    Returns:
+        pd.Series: Prix de clôture
+    """
+    # Téléchargement des données
+    data = yf.download(ticker, start=start_date, end=end_date)
+
+    # Retourne les prix de clôture
+    return data['Close']
+
+# Fonction de décomposition saisonnière multiplicative
+def perform_multiplicative_decomposition(stock_prices):
+    """
+    Réalise la décomposition saisonnière multiplicative des prix d'une action.
+
+    Args:
+        stock_prices (pd.Series): Prix de clôture
+    """
+    # Décomposition saisonnière multiplicative
+    # Période par défaut de 252 jours (jours ouvrables dans une année)
+    decomposition = seasonal_decompose(stock_prices, period=252, model='multiplicative')
+
+    # Création de la figure avec 4 sous-graphiques
+    plt.figure(figsize=(15, 10))
+
+    # Plot de la décomposition
+    decomposition.plot()
+
+    # Titre principal
+    plt.suptitle(f'Décomposition Saisonnière Multiplicative - {stock_prices.name}', fontsize=16)
+
+    # Ajustement de la mise en page
+    plt.tight_layout()
+
+    # Affichage du graphique
+    plt.show()
+
+    # Retourne l'objet de décomposition pour analyses supplémentaires
+    return decomposition
+
+# Fonction principale
+def main():
+    # Sélection d'un ticker (choix arbitraire)
+    ticker = 'AAPL'
+
+    # Téléchargement des données
+    stock_prices = download_stock_data(ticker)
+
+    # Nommer la série avec le ticker
+    stock_prices.name = ticker
+
+    # Décomposition saisonnière multiplicative
+    decomposition = perform_multiplicative_decomposition(stock_prices)
+
+    # Informations supplémentaires
+    print("\nInformations sur la Décomposition Multiplicative :")
+    print("Tendance (moyenne):", decomposition.trend.mean())
+    print("Saisonnalité (moyenne):", decomposition.seasonal.mean())
+    print("Résidus (moyenne):", decomposition.resid.mean())
+
+# Exécution du script
+if __name__ == "__main__":
+    main()
+     
+[*********************100%***********************]  1 of 1 completed
+<Figure size 1500x1000 with 0 Axes>
+
+Informations sur la Décomposition Multiplicative :
+Tendance (moyenne): 170.83123022276257
+Saisonnalité (moyenne): 1.0003963439299588
+Résidus (moyenne): 0.9882429959400933
+
+import yfinance as yf
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+
+# Téléchargement des données historiques
+def download_stock_data(ticker, start_date='2022-01-01', end_date='2024-12-31'):
+    """
+    Télécharge les données historiques des prix de clôture pour un ticker.
+
+    Args:
+        ticker (str): Symbole boursier
+        start_date (str): Date de début
+        end_date (str): Date de fin
+
+    Returns:
+        pd.Series: Prix de clôture
+    """
+    # Téléchargement des données
+    data = yf.download(ticker, start=start_date, end=end_date)
+
+    # Retourne les prix de clôture
+    return data['Close']
+
+# Fonction principale
+def main():
+    # Sélection d'un ticker (choix arbitraire)
+    ticker = 'AAPL'
+
+    # Téléchargement des données
+    stock_prices = download_stock_data(ticker)
+
+    # Calcul du logarithme de la série
+    log = np.log(stock_prices)
+
+    # Création de deux sous-graphiques côte à côte
+    plt.figure(figsize=(15, 6))
+
+    # Graphique 1 : Série originale
+    plt.subplot(1, 2, 1)
+    stock_prices.plot(title=f'Prix de Clôture - {ticker}')
+    plt.xlabel('Date')
+    plt.ylabel('Prix')
+
+    # Graphique 2 : Série logarithmique
+    plt.subplot(1, 2, 2)
+    log.plot(title=f'Logarithme des Prix - {ticker}', color='green')
+    plt.xlabel('Date')
+    plt.ylabel('Log(Prix)')
+
+    # Ajustement de la mise en page
+    plt.tight_layout()
+
+    # Affichage du graphique
+    plt.show()
+
+    # Informations supplémentaires
+    print("\nInformations sur la Transformation Logarithmique :")
+    print("Moyenne des prix originaux:", stock_prices.mean())
+    print("Moyenne des log(prix):", log.mean())
+    print("Écart-type des prix originaux:", stock_prices.std())
+    print("Écart-type des log(prix):", log.std())
+
+# Exécution du script
+if __name__ == "__main__":
+    main()
+     
+[*********************100%***********************]  1 of 1 completed
+
+
+
+Informations sur la Transformation Logarithmique :
+Moyenne des prix originaux: Ticker
+AAPL    176.697678
+dtype: float64
+Moyenne des log(prix): Ticker
+AAPL    5.161036
+dtype: float64
+Écart-type des prix originaux: Ticker
+AAPL    29.50768
+dtype: float64
+Écart-type des log(prix): Ticker
+AAPL    0.16258
+dtype: float64
+
+import yfinance as yf
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+from statsmodels.tsa.seasonal import seasonal_decompose
+
+def download_stock_data(ticker, start_date='2022-01-01', end_date='2024-12-31'):
+    """
+    Télécharge les données historiques des prix de clôture pour un ticker.
+
+    Args:
+        ticker (str): Symbole boursier
+        start_date (str): Date de début
+        end_date (str): Date de fin
+
+    Returns:
+        pd.Series: Prix de clôture
+    """
+    # Téléchargement des données
+    data = yf.download(ticker, start=start_date, end=end_date)
+
+    # Retourne les prix de clôture
+    return data['Close']
+
+def plot_seasonal_analysis(stock_prices):
+    """
+    Analyse et visualise les variations saisonnières d'une série temporelle.
+
+    Args:
+        stock_prices (pd.Series): Série des prix
+    """
+    # Correction des variations saisonnières
+    decomposition = seasonal_decompose(stock_prices, period=252)  # 252 jours de trading par an
+
+    # Création de la figure avec 4 sous-graphiques
+    plt.figure(figsize=(16, 12))
+
+    # Série originale
+    plt.subplot(2, 2, 1)
+    stock_prices.plot(title='Série Originale')
+    plt.xlabel('Date')
+    plt.ylabel('Prix')
+
+    # Tendance
+    plt.subplot(2, 2, 2)
+    decomposition.trend.plot(title='Tendance', color='green')
+    plt.xlabel('Date')
+    plt.ylabel('Tendance')
+
+    # Composante saisonnière
+    plt.subplot(2, 2, 3)
+    decomposition.seasonal.plot(title='Variations Saisonnières', color='red')
+    plt.xlabel('Date')
+    plt.ylabel('Composante Saisonnière')
+
+    # Résidus
+    plt.subplot(2, 2, 4)
+    decomposition.resid.plot(title='Résidus', color='purple')
+    plt.xlabel('Date')
+    plt.ylabel('Résidus')
+
+    plt.tight_layout()
+    plt.show()
+
+    # Série corrigée des variations saisonnières
+    plt.figure(figsize=(12, 6))
+    plt.plot(stock_prices.index, stock_prices, label='Série originale', color='blue')
+    plt.plot(stock_prices.index, decomposition.trend,
+             label='Série corrigée des variations saisonnières',
+             color='red', linestyle='--')
+    plt.title(f'Série Temporelle avec Correction des Variations Saisonnières')
+    plt.xlabel('Date')
+    plt.ylabel('Prix')
+    plt.legend()
+    plt.tight_layout()
+    plt.show()
+
+    # Calculs et impressions statistiques
+    print("\nAnalyse des Variations Saisonnières :")
+    print("Moyenne de la série originale:", stock_prices.mean())
+    print("Moyenne de la tendance:", decomposition.trend.mean())
+    print("Amplitude des variations saisonnières:",
+          decomposition.seasonal.max() - decomposition.seasonal.min())
+    print("Écart-type des résidus:", decomposition.resid.std())
+
+def main():
+    # Sélection d'un ticker
+    ticker = 'AAPL'
+
+    # Téléchargement des données
+    stock_prices = download_stock_data(ticker)
+
+    # Analyse des variations saisonnières
+    plot_seasonal_analysis(stock_prices)
+
+# Exécution du script
+if __name__ == "__main__":
+    main()
+     
+[*********************100%***********************]  1 of 1 completed
+
+
+
+Analyse des Variations Saisonnières :
+Moyenne de la série originale: Ticker
+AAPL    176.697678
+dtype: float64
+Moyenne de la tendance: 170.83123022276257
+Amplitude des variations saisonnières: 38.298293825179854
+Écart-type des résidus: 9.034815685766459
+
+import yfinance as yf
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+from statsmodels.tsa.seasonal import seasonal_decompose
+
+def download_stock_data(ticker, start_date='2022-01-01', end_date='2024-12-31'):
+    """
+    Télécharge les données historiques des prix de clôture pour un ticker.
+
+    Args:
+        ticker (str): Symbole boursier
+        start_date (str): Date de début
+        end_date (str): Date de fin
+
+    Returns:
+        pd.Series: Prix de clôture
+    """
+    # Téléchargement des données
+    data = yf.download(ticker, start=start_date, end=end_date)
+
+    # Retourne les prix de clôture
+    return data['Close']
+
+def plot_moving_average(stock_prices):
+    """
+    Calcule et visualise la moyenne mobile centrée sur 12 mois.
+
+    Args:
+        stock_prices (pd.Series): Série des prix
+    """
+    # Calcul de la moyenne mobile centrée sur 12 mois
+    # La méthode rolling() avec window=12 et center=True crée une moyenne mobile centrée
+    ma = stock_prices.rolling(window=12, center=True).mean()
+
+    # Création de la figure
+    plt.figure(figsize=(15, 7))
+
+    # Tracer la série originale
+    plt.plot(stock_prices.index, stock_prices, label='Prix original', color='blue', alpha=0.7)
+
+    # Tracer la moyenne mobile
+    plt.plot(ma.index, ma, label='Moyenne mobile (12 mois)', color='red', linewidth=2)
+
+    plt.title('Série Temporelle avec Moyenne Mobile Centrée (12 mois)')
+    plt.xlabel('Date')
+    plt.ylabel('Prix')
+    plt.legend()
+    plt.grid(True)
+    plt.tight_layout()
+    plt.show()
+
+    # Informations supplémentaires
+    print("\nInformations sur la Moyenne Mobile :")
+    print("Nombre de points de la série originale:", len(stock_prices))
+    print("Nombre de points de la moyenne mobile:", len(ma))
+    print("\nPremiers points de la moyenne mobile :")
+    print(ma.head())
+    print("\nDerniers points de la moyenne mobile :")
+    print(ma.tail())
+
+def main():
+    # Sélection d'un ticker
+    ticker = 'AAPL'
+
+    # Téléchargement des données
+    stock_prices = download_stock_data(ticker)
+
+    # Analyse de la moyenne mobile
+    plot_moving_average(stock_prices)
+
+# Exécution du script
+if __name__ == "__main__":
+    main()
+     
+[*********************100%***********************]  1 of 1 completed
+
+Informations sur la Moyenne Mobile :
+Nombre de points de la série originale: 752
+Nombre de points de la moyenne mobile: 752
+
+Premiers points de la moyenne mobile :
+Ticker      AAPL
+Date            
+2022-01-03   NaN
+2022-01-04   NaN
+2022-01-05   NaN
+2022-01-06   NaN
+2022-01-07   NaN
+
+Derniers points de la moyenne mobile :
+Ticker      AAPL
+Date            
+2024-12-23   NaN
+2024-12-24   NaN
+2024-12-26   NaN
+2024-12-27   NaN
+2024-12-30   NaN
+
+import yfinance as yf
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+
+def download_stock_data(ticker, start_date='2022-01-01', end_date='2024-12-31'):
+    """
+    Télécharge les données historiques des prix de clôture pour un ticker.
+
+    Args:
+        ticker (str): Symbole boursier
+        start_date (str): Date de début
+        end_date (str): Date de fin
+
+    Returns:
+        pd.Series: Prix de clôture
+    """
+    # Téléchargement des données
+    data = yf.download(ticker, start=start_date, end=end_date)
+
+    # Retourne les prix de clôture
+    return data['Close']
+
+def plot_log_and_moving_average(stock_prices):
+    """
+    Calcule et visualise la série logarithmique et la moyenne mobile.
+
+    Args:
+        stock_prices (pd.Series): Série des prix
+    """
+    # Calcul du logarithme
+    log = np.log(stock_prices)
+
+    # Calcul de la moyenne mobile centrée sur 12 mois
+    ma = stock_prices.rolling(window=12, center=True).mean()
+
+    # Création de la figure
+    plt.figure(figsize=(15, 7))
+
+    # Double axe pour comparer les séries
+    fig, ax1 = plt.subplots(figsize=(15, 7))
+
+    # Axe principal pour la série logarithmique
+    color1 = 'green'
+    ax1.set_xlabel('Date')
+    ax1.set_ylabel('Log(Prix)', color=color1)
+    ax1.plot(log.index, log, label='Série Logarithmique', color=color1, alpha=0.7)
+    ax1.tick_params(axis='y', labelcolor=color1)
+
+    # Axe secondaire pour la moyenne mobile
+    ax2 = ax1.twinx()
+    color2 = 'red'
+    ax2.set_ylabel('Moyenne Mobile (Log)', color=color2)
+    ax2.plot(ma.index, np.log(ma), label='Moyenne Mobile (Log)', color=color2, linewidth=2)
+    ax2.tick_params(axis='y', labelcolor=color2)
+
+    # Titre et légende
+    plt.title('Série Logarithmique et Moyenne Mobile (Échelle Logarithmique)')
+    fig.tight_layout()
+
+    # Légende combinée
+    lines1, labels1 = ax1.get_legend_handles_labels()
+    lines2, labels2 = ax2.get_legend_handles_labels()
+    ax1.legend(lines1 + lines2, labels1 + labels2, loc='best')
+
+    plt.show()
+
+    # Informations supplémentaires
+    print("\nInformations Comparatives :")
+    print("Moyenne de la série logarithmique:", log.mean())
+    print("Moyenne de la moyenne mobile (log):", np.log(ma).mean())
+    print("Écart-type de la série logarithmique:", log.std())
+    print("Écart-type de la moyenne mobile (log):", np.log(ma).std())
+
+def main():
+    # Sélection d'un ticker
+    ticker = 'AAPL'
+
+    # Téléchargement des données
+    stock_prices = download_stock_data(ticker)
+
+    # Représentation graphique
+    plot_log_and_moving_average(stock_prices)
+
+# Exécution du script
+if __name__ == "__main__":
+    main()
+     
+[*********************100%***********************]  1 of 1 completed
+<Figure size 1500x700 with 0 Axes>
+
+Informations Comparatives :
+Moyenne de la série logarithmique: Ticker
+AAPL    5.161036
+dtype: float64
+Moyenne de la moyenne mobile (log): Ticker
+AAPL    5.158589
+dtype: float64
+Écart-type de la série logarithmique: Ticker
+AAPL    0.16258
+dtype: float64
+Écart-type de la moyenne mobile (log): Ticker
+AAPL    0.158657
+dtype: float64
