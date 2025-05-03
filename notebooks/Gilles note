@@ -1,1 +1,245 @@
+# Analyse technique des 10 plus grandes capitalisations du Nasdaq avec Machine Learning
+import yfinance as yf
+import pandas as pd
+import numpy as np
+import ta
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import classification_report, accuracy_score
+from sklearn.preprocessing import StandardScaler
+import matplotlib.pyplot as plt
+import warnings
+warnings.filterwarnings('ignore')
 
+# 1. Récupération des données
+tickers = ["AAPL", "MSFT", "NVDA", "GOOGL", "AMZN", "META", "AVGO", "TSLA", "COST", "PEP"]
+data = {}
+
+# Utilisation d'une date de fin valide (car 2024-12-31 est dans le futur)
+end_date = pd.Timestamp.today().strftime('%Y-%m-%d')
+
+print(f"🔄 Téléchargement des données historiques jusqu'à {end_date}")
+for ticker in tickers:
+    try:
+        # Ajout du paramètre group_by=False pour éviter les colonnes multi-niveaux
+        df = yf.download(ticker, start="2020-01-01", end=end_date, group_by=False)
+        if df.empty or len(df) < 60:  # Vérification des données minimales
+            print(f"⚠️ Données insuffisantes pour {ticker}, ignoré")
+            continue
+            
+        # Vérification du format des colonnes et correction si nécessaire
+        if isinstance(df.columns, pd.MultiIndex):
+            # Conversion des colonnes multi-index en colonnes simples
+            df.columns = [col[0] for col in df.columns]
+        
+        # Vérification des colonnes requises
+        required_cols = ["Open", "High", "Low", "Close", "Volume"]
+        if not all(col in df.columns for col in required_cols):
+            print(f"⚠️ Colonnes manquantes pour {ticker}, ignoré")
+            continue
+            
+        df = df.dropna()
+        df['Ticker'] = ticker
+        data[ticker] = df
+        print(f"✅ {ticker}: {len(df)} jours de données téléchargés")
+    except Exception as e:
+        print(f"❌ Erreur lors du téléchargement de {ticker}: {str(e)}")
+
+if not data:
+    raise ValueError("Aucune donnée récupérée pour les tickers spécifiés")
+
+# 2. Calcul des indicateurs techniques
+print("\n🧮 Calcul des indicateurs techniques")
+for ticker in list(data.keys()):
+    df = data[ticker]
+    
+    # Vérifier que toutes les colonnes requises existent
+    required_cols = ["Open", "High", "Low", "Close", "Volume"]
+    if not all(col in df.columns for col in required_cols):
+        print(f"⚠️ Colonnes manquantes pour {ticker}, ignoré")
+        continue
+    
+    try:
+        # Impression pour le débogage
+        print(f"Debug - {ticker} colonnes: {df.columns.tolist()}")
+        
+        # Ajout des indicateurs techniques
+        df = ta.add_all_ta_features(
+            df, 
+            open="Open", 
+            high="High", 
+            low="Low",
+            close="Close", 
+            volume="Volume", 
+            fillna=True
+        )
+        
+        # Définition de la cible : hausse (1) ou baisse (0) le jour suivant
+        df["Target"] = (df["Close"].shift(-1) > df["Close"]).astype(int)
+        
+        # Suppression des lignes avec valeurs manquantes
+        clean_df = df.dropna()
+        
+        # Vérifier qu'il reste suffisamment de données
+        if len(clean_df) < 50:
+            print(f"⚠️ Données insuffisantes après nettoyage pour {ticker}, ignoré")
+            continue
+            
+        data[ticker] = clean_df
+        print(f"✅ {ticker}: {len(clean_df)} jours exploitables")
+    except Exception as e:
+        print(f"❌ Erreur lors du calcul des indicateurs pour {ticker}: {str(e)}")
+        # Supprimer le ticker qui a échoué
+        if ticker in data:
+            del data[ticker]
+
+# 3. Entraînement et évaluation du modèle pour chaque titre
+print("\n🤖 Entraînement des modèles")
+results = {}
+
+for ticker in list(data.keys()):  # Utiliser une copie des clés pour éviter les erreurs pendant l'itération
+    if ticker not in data:
+        continue
+        
+    df = data[ticker]
+    
+    # Vérifier si Target existe dans le DataFrame
+    if "Target" not in df.columns:
+        print(f"⚠️ Colonne Target manquante pour {ticker}, ignoré")
+        continue
+    
+    # Sélection des features (exclure colonnes non numériques et la cible)
+    try:
+        features = df.select_dtypes(include=[np.number]).columns.tolist()
+        features = [col for col in features if col not in ["Target"]]
+        
+        if not features:
+            print(f"⚠️ Pas de caractéristiques valides pour {ticker}, ignoré")
+            continue
+        
+        X = df[features]
+        y = df["Target"]
+        
+        # Vérification des données avant séparation
+        if len(X) < 30:
+            print(f"⚠️ Ensemble de données trop petit pour {ticker}, ignoré")
+            continue
+        
+        # Normalisation des caractéristiques
+        scaler = StandardScaler()
+        X_scaled = scaler.fit_transform(X)
+        
+        # Division chronologique des données (pas de mélange)
+        train_size = int(len(X) * 0.8)
+        X_train, X_test = X_scaled[:train_size], X_scaled[train_size:]
+        y_train, y_test = y[:train_size], y[train_size:]
+        
+        if len(np.unique(y_train)) < 2 or len(np.unique(y_test)) < 2:
+            print(f"⚠️ Classes déséquilibrées pour {ticker}, ignoré")
+            continue
+    except Exception as e:
+        print(f"❌ Erreur lors de la préparation des données pour {ticker}: {str(e)}")
+        continue
+    
+    try:
+        # Entraînement du modèle avec plus d'arbres pour améliorer la stabilité
+        model = RandomForestClassifier(n_estimators=200, max_depth=10, random_state=42, n_jobs=-1)
+        model.fit(X_train, y_train)
+        
+        # Évaluation
+        y_pred = model.predict(X_test)
+        acc = accuracy_score(y_test, y_pred)
+        
+        # Stockage des résultats
+        results[ticker] = {
+            "model": model,
+            "accuracy": acc,
+            "features": features,
+            "scaler": scaler,
+            "report": classification_report(y_test, y_pred, output_dict=True),
+            "balance": {
+                "train": dict(pd.Series(y_train).value_counts(normalize=True)),
+                "test": dict(pd.Series(y_test).value_counts(normalize=True))
+            }
+        }
+        
+        print(f"\n🔍 Résultats pour {ticker}:")
+        print(f"Précision: {acc:.4f}")
+        print(f"Distribution train: Hausse={results[ticker]['balance']['train'].get(1, 0):.2f}, "
+              f"Baisse={results[ticker]['balance']['train'].get(0, 0):.2f}")
+        print(f"Distribution test: Hausse={results[ticker]['balance']['test'].get(1, 0):.2f}, "
+              f"Baisse={results[ticker]['balance']['test'].get(0, 0):.2f}")
+        print(classification_report(y_test, y_pred))
+        
+    except Exception as e:
+        print(f"❌ Erreur lors de l'entraînement pour {ticker}: {str(e)}")
+
+if not results:
+    print("\n❌ Aucun modèle n'a pu être entraîné correctement. Problème potentiel avec le format des données.")
+    print("Vérification des données disponibles:")
+    for ticker in data:
+        print(f"{ticker}: {len(data[ticker])} lignes, {len(data[ticker].columns)} colonnes")
+        print(f"Premières colonnes: {list(data[ticker].columns[:5])}")
+        if 'Target' in data[ticker].columns:
+            target_count = data[ticker]['Target'].value_counts()
+            print(f"Distribution de Target: {target_count.to_dict()}")
+        else:
+            print("❌ Colonne Target manquante")
+        print("---")
+
+# 4. Visualisation des précisions et caractéristiques importantes
+if results:
+    plt.figure(figsize=(12, 6))
+    accuracies = pd.Series({k: v['accuracy'] for k, v in results.items()})
+    accuracies.sort_values().plot(kind='barh', color='skyblue')
+    plt.title("📈 Précision du modèle RandomForest par titre")
+    plt.xlabel("Accuracy")
+    plt.axvline(x=0.5, color='red', linestyle='--', label='Baseline (50%)')
+    plt.grid(True, alpha=0.3)
+    plt.legend()
+    plt.tight_layout()
+    plt.savefig('accuracy_results.png')
+    plt.show()
+else:
+    print("❌ Aucun modèle n'a été entraîné avec succès. Impossible de générer des visualisations.")
+
+# 5. Analyse des caractéristiques les plus importantes (pour le meilleur modèle)
+if results:
+    best_ticker = max(results, key=lambda x: results[x]['accuracy'])
+    best_model = results[best_ticker]['model']
+    features = results[best_ticker]['features']
+    
+    # Importance des caractéristiques
+    plt.figure(figsize=(12, 8))
+    importances = pd.Series(best_model.feature_importances_, index=features)
+    importances.sort_values(ascending=False).head(15).plot(kind='barh', color='lightgreen')
+    plt.title(f"🏆 Top 15 caractéristiques importantes pour {best_ticker}")
+    plt.grid(True, alpha=0.3)
+    plt.tight_layout()
+    plt.savefig('feature_importance.png')
+    plt.show()
+    
+    print(f"\n🏆 Meilleur modèle: {best_ticker} avec une précision de {results[best_ticker]['accuracy']:.4f}")
+
+# 6. Prédiction pour le dernier jour disponible
+print("\n🔮 Prédictions pour le prochain jour de trading:")
+for ticker in results:
+    try:
+        current_data = data[ticker].iloc[-1:].copy()
+        features = results[ticker]['features']
+        scaler = results[ticker]['scaler']
+        model = results[ticker]['model']
+        
+        X_current = current_data[features]
+        X_scaled = scaler.transform(X_current)
+        prediction = model.predict(X_scaled)[0]
+        proba = model.predict_proba(X_scaled)[0]
+        
+        direction = "🟢 HAUSSE" if prediction == 1 else "🔴 BAISSE"
+        confidence = proba[prediction]
+        
+        print(f"{ticker}: {direction} (confiance: {confidence:.2f})")
+    except Exception as e:
+        print(f"❌ Erreur lors de la prédiction pour {ticker}: {str(e)}")
+
+print("\n⚠️ Note: Ces prédictions sont basées sur l'analyse technique historique et ne constituent pas des conseils d'investissement.")
