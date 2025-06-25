@@ -105,10 +105,20 @@ def execute_tool_node(state: AgentState):
         print(f"Le LLM a décidé d'appeler le tool : {tool_name} - avec les arguments : {tool_args}")
         try:
             if tool_name == "fetch_data":
-                output = _fetch_data_logic(ticker=tool_args.get("ticker"))
-                current_state_updates["fetched_df_json"] = output.to_json(orient='split')
-                current_state_updates["ticker"] = tool_args.get("ticker")
-                tool_outputs.append(ToolMessage(tool_call_id=tool_id, content="[Données récupérées avec succès.]"))
+                try:
+                  output_df = _fetch_data_logic(ticker=tool_args.get("ticker"))
+                  current_state_updates["fetched_df_json"] = output_df.to_json(orient='split')
+                  current_state_updates["ticker"] = tool_args.get("ticker")
+                  tool_outputs.append(ToolMessage(tool_call_id=tool_id, content="[Données récupérées avec succès.]"))
+            
+                except APILimitError as e:
+                    # C'est ici que nous gérons l'erreur de clé API !
+                    print(f"Erreur de clé API détectée : {e}")
+                    user_friendly_error = "Désolé, il semble que j'aie un problème d'accès à mon fournisseur de données financières. C'est probablement dû à une limite d'utilisation. Peux-tu réessayer un peu plus tard ?"
+                    # On informe l'agent de l'échec via un ToolMessage
+                    tool_outputs.append(ToolMessage(tool_call_id=tool_id, content=json.dumps({"error": user_friendly_error})))
+                    # On stocke l'erreur pour arrêter le graph proprement
+                    current_state_updates["error"] = user_friendly_error
             
             elif tool_name == "preprocess_data":
                 fetched_df = pd.read_json(state["fetched_df_json"], orient='split')
