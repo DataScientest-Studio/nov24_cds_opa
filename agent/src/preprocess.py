@@ -5,32 +5,15 @@ import pandas as pd
 
 def preprocess_financial_data(df: pd.DataFrame) -> pd.DataFrame:
     """
-    Preprocesses raw financial data into features suitable for the prediction model.
-    This is a placeholder for your actual data cleaning and feature engineering.
+    Préprocesse des données financières brutes en features conformes pour le modèle de prédiction.
     """
-    print("Preprocessing data...")
-    # Example: Ensure all expected columns are present, fill NaNs, etc.
-    # For this example, we'll just ensure it's numerical and ready
-    
-    # Simulate selecting/creating features that your RF model expects
-    # For example, if your model uses 'Revenue_Growth', 'Net_Income_Margin', 'Current_Ratio'
-    # you would calculate them here.
-    
-    # For simplicity, let's assume the model uses 'Revenue', 'Net Income', 'EPS', 'Debt_to_Equity', 'ROE' directly
-    # And we just take the latest year's data as input for prediction
-    
-    if df.empty:
-        raise ValueError("Cannot preprocess empty DataFrame.")
-
-    # Get the latest year's data
-    processed_df = df.iloc[-1:].copy()
-
-    # Ensure numerical types
-    for col in processed_df.columns:
-        processed_df[col] = pd.to_numeric(processed_df[col], errors='coerce')
-    
-    # Handle any NaNs if necessary (e.g., fill with 0 or mean, depending on your model)
-    processed_df = processed_df.fillna(0)
+    df['index'] = df.symbol + '_' + df.calendarYear.astype('string')
+    df = df.set_index('index')
+    df['marginProfit'] = df['netIncomePerShare'] / df['revenuePerShare']
+    df = df.sort_values(by='calendarYear')
+    df['revenuePerShare_YoY_Growth'] = ((df['revenuePerShare'] / df['revenuePerShare'].shift(1)) - 1) * 100
+    df = df[['marketCap', 'marginProfit', 'roe', 'roic', 'revenuePerShare', 'debtToEquity', 'revenuePerShare_YoY_Growth', 'earningsYield']]
+    processed_df = df.dropna()
 
     print(f"Preprocessed data:\n{processed_df.head()}")
     return processed_df

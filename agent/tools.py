@@ -34,19 +34,29 @@ def visualize_data() -> str:
     return "[L'étape de visualisation est prête à être  exécutée.]"
 
 @tool
-def display_data() -> str:
+def display_raw_data() -> str:
     """
-    Affiche les données sous forme de tableau.
-    Utilise ce tool si l'utilisateur te demande explicitement de 'voir les données', 'montrer un tableau',
-    'afficher le DataFrame', ou tout autre requête similaire, APRES avoir récupéré les données, ou les avoir préprocessés.
+    Affiche le tableau de données financières brutes qui ont été initialement récupérées.
+    Utilise cet outil si l'utilisateur demande explicitement les 'données brutes' ou les 'données originales'.
     """
-    return "[Le tableau de données est prêt à être affiché.]"
+    return "[Le tableau de données brutes est prêt à être affiché.]"
 
-# C'est cette liste qui est passée à l'agent
+@tool
+def display_processed_data() -> str:
+    """
+    Affiche le tableau de données financières traitées et nettoyées, prêtes pour l'analyse.
+    Utilise cet outil par défaut lorsque l'utilisateur demande 'voir les données', 'montre le tableau', 
+    'affiche les données nettoyées', ou après que l'étape de prétraitement a été annoncée.
+    """
+    return "[Le tableau de données traitées est prêt à être affiché.]"
+
+
+# --- MODIFIÉ ---
 available_tools = [
     fetch_data,
     preprocess_data,
     predict_performance,
     visualize_data,
-    display_data, 
+    display_raw_data,       # <-- RENOMMÉ
+    display_processed_data, # <-- NOUVEAU
 ]
