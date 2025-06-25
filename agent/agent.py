@@ -3,6 +3,8 @@ import os
 import json
 from typing import TypedDict, List, Annotated, Any
 import pandas as pd
+import plotly.express as px
+import plotly.io as pio
 import uuid
 
 from langchain_openai import ChatOpenAI
@@ -11,13 +13,14 @@ from langgraph.graph import StateGraph, END
 from langgraph.graph.message import AnyMessage, add_messages
 from langgraph.checkpoint.memory import MemorySaver
 
+
 # --- Import des tools ---
 from tools import (
     available_tools,
     _fetch_data_logic, 
     _preprocess_data_logic, 
     _predict_performance_logic, 
-    _visualize_data_logic
+    create_dynamic_chart as create_dynamic_chart_tool
 )
 
 # --- Initalisation du LLM ---
@@ -42,50 +45,68 @@ class AgentState(TypedDict):
     fetched_df_json: str
     processed_df_json: str
     prediction: str
-    image_base64: str
+    plotly_json: str  
     messages: Annotated[List[AnyMessage], add_messages]
     error: str
 
 # --- Prompt système (définition du rôle de l'agent) ---
-system_prompt = """Ton nom est Stella. Tu es une assistante experte financière. Ton but principal est d'aider les utilisateurs en analysant des stocks.
+# agent.py
 
-Quand un utilisateur te demande d'analyser un stock, tu DOIS suivre une séquence d'actions prédéfinie. Une étape clé de cette analyse est la prédiction, gérée par l'outil `predict_performance`.
+system_prompt = """Ton nom est Stella. Tu es une assistante experte financière. Ton but principal est d'aider les utilisateurs en analysant des actions.
+
+**Séquence d'analyse complète :**
+Quand un utilisateur te demande une analyse complète, tu DOIS suivre cette séquence d'outils :
+1. `fetch_data` avec le ticker demandé.
+2. `preprocess_data` pour nettoyer les données.
+3. `predict_performance` pour obtenir un verdict.
+Ta tâche est considérée comme terminée après l'appel à `predict_performance`. La réponse finale avec le graphique sera générée automatiquement.
+
+**Demandes de graphiques spécifiques :**
+Si, après une première analyse, l'utilisateur demande une visualisation spécifique (ex: "montre-moi l'évolution du ROE"), tu dois utiliser l'outil `create_dynamic_chart`. Choisis le meilleur type de graphique (`line` pour une évolution, `bar` pour une comparaison, etc.) et les bonnes colonnes.
 
 **Logique de Prédiction :**
-Mon modèle n'est pas conçu pour te dire si une action est "bonne", mais pour t'avertir si elle présente des signaux de "gros danger".
-- Si l'outil `predict_performance` renvoie **"Risque Élevé Détecté"**, cela signifie que mon modèle est très confiant que l'action va sous-performer. 
-Tu dois présenter cela comme un avertissement clair.
-- Si l'outil renvoie **"Aucun Risque Extrême Détecté"**, cela ne veut PAS dire que l'action est un bon investissement. 
-Explique simplement à l'utilisateur que mon analyse n'a pas trouvé de signaux de danger évidents, mais que cela ne constitue pas une recommandation d'achat.
+- Si `predict_performance` renvoie "Risque Élevé Détecté", présente cela comme un avertissement clair.
+- Si `predict_performance` renvoie "Aucun Risque Extrême Détecté", explique que cela n'est PAS une recommandation d'achat, mais simplement l'absence de signaux de danger majeurs.
 
-**Séquence d'actions en cas de demande d'analyse complète:**
-1. Premièrement, tu dois appeler le tool `fetch_data` avec le ticker correspondant à la demande de l'utilisateur.
-2. Deuxièmement, tu dois appeler le tool `preprocess_data` pour préparer les données récupérées.
-3. Troisièmement, tu dois appeler le tool `predict_performance` pour prédire la performance du stock.
-4. Enfin, tu dois appeler le tool `visualize_data` pour compléter l'analyse.
-
-Tu disposes également de deux outils pour afficher des données :
-- `display_raw_data`: Utilise cet outil UNIQUEMENT si l'utilisateur demande explicitement les données 'brutes' ou 'originales'.
-- `display_processed_data`: Utilise cet outil par défaut quand l'utilisateur demande de 'voir les données', 'montrer le tableau', etc., car ce sont les données les plus utiles pour l'analyse.
-
-Ta tâche sera complète uniquement après que le tool `visualize_data` ait été appelé. Si tu rencontres une erreur, informe l'utilisateur.
-Tu dois toujours répondre en français et tutoyer ton interlocuteur. Tu ne dois pas faire de suppositions sur les données financières, tu dois te baser uniquement sur les données récupérées par le tool `fetch_data`.
-Lorsque l'utilisateur te demande qui tu es, ou comment tu fonctionnes, tu te présenteras et lui expliqueras ton fonctionnement.
-Tes réponses doivent toujours être polies, claires et concises.
+Tu dois toujours répondre en français et tutoyer ton interlocuteur.
 """
-
 # --- Définition des noeuds du Graph ---
 
 # Noeud 1 : agent_node, point d'entrée
 def agent_node(state: AgentState):
     """Le 'cerveau' de l'agent. Décide le prochain outil à appeler."""
     print("\n--- AGENT: Décision de la prochaine étape... ---")
-    messages = state['messages']
-    if not messages or not isinstance(messages[0], SystemMessage):
-        final_messages = [SystemMessage(content=system_prompt)] + list(messages)
-    else:
-        final_messages = messages
-    response = llm.bind_tools(available_tools).invoke(final_messages)
+    
+    # Prépare le prompt système de base
+    messages = [SystemMessage(content=system_prompt)]
+    
+    # --- INJECTION DE CONTEXTE DYNAMIQUE ---
+    # Vérifie si des données prétraitées existent dans l'état
+    if state.get("processed_df_json"):
+        try:
+            # Charge les colonnes disponibles à partir des données
+            df = pd.read_json(state["processed_df_json"], orient='split')
+            available_columns = df.columns.tolist()
+            
+            # Crée un message de contexte à injecter
+            context_message = HumanMessage(
+                content=f"""
+                CONTEXTE IMPORTANT POUR TA PROCHAINE ACTION :
+                Des données sont disponibles pour l'action '{state.get('ticker', '')}'.
+                Les noms de colonnes EXACTS que tu peux utiliser pour les graphiques sont : {available_columns}.
+                Quand tu utilises l'outil `create_dynamic_chart`, tu DOIS choisir un nom de colonne dans cette liste pour l'argument `y_column`.
+                """
+            )
+            # Ajoute ce contexte juste avant les messages de l'utilisateur
+            messages.append(context_message)
+        except Exception as e:
+            print(f"Avertissement : Impossible d'injecter le contexte des colonnes. Erreur : {e}")
+
+    # Ajoute le reste de l'historique des messages
+    messages.extend(state['messages'])
+
+    # Invoque le LLM avec le contexte enrichi
+    response = llm.bind_tools(available_tools).invoke(messages)
     return {"messages": [response]}
 
 # Noeud 2 : execute_tool_node, exécute les outils en se basant sur la décision de l'agent_node (Noeud 1).
@@ -132,18 +153,80 @@ def execute_tool_node(state: AgentState):
                 current_state_updates["prediction"] = output
                 tool_outputs.append(ToolMessage(tool_call_id=tool_id, content=output))
             
-            elif tool_name == "visualize_data":
-                fetched_df = pd.read_json(state["fetched_df_json"], orient='split')
-                output = _visualize_data_logic(data=fetched_df, prediction=state["prediction"], ticker=state["ticker"])
-                current_state_updates["image_base64"] = output
-                tool_outputs.append(ToolMessage(tool_call_id=tool_id, content="[Image générée avec succès.]"))
-            
             elif tool_name in ["display_raw_data", "display_processed_data"]:
                 if not state.get("fetched_df_json"):
                      tool_outputs.append(ToolMessage(tool_call_id=tool_id, content="Erreur: Aucune donnée disponible à afficher."))
                 else:
                     tool_outputs.append(ToolMessage(tool_call_id=tool_id, content="[Préparation de l'affichage des données.]"))
-            
+
+            elif tool_name == "create_dynamic_chart":
+              if not state.get("processed_df_json"):
+                  raise ValueError("Aucune donnée n'est disponible pour créer un graphique.")
+
+              df = pd.read_json(state["processed_df_json"], orient='split')
+              chart_type = tool_args.get('chart_type')
+              title = tool_args.get('title', "Graphique Financier")
+              y_col_requested = tool_args.get('y_column') # Le LLM devrait maintenant donner le nom exact
+
+              # Sécurité : on vérifie quand même que la colonne existe
+              if y_col_requested not in df.columns:
+                  raise ValueError(f"La colonne '{y_col_requested}' n'existe pas. Colonnes valides : {df.columns.tolist()}")
+
+                # --- CAS 1: Le LLM demande un graphique en ligne (évolution temporelle) ---
+              if chart_type == 'line':
+                  print("Logique détectée: Graphique en ligne (line chart)")
+                  # Prépare les données pour une série temporelle
+                  df.reset_index(inplace=True)
+                  df['year'] = df['index'].str.split('_').str[-1]
+                  
+                  x_col_to_use = 'year'
+                  y_col_requested = tool_args.get('y_column')
+
+                  if y_col_requested not in df.columns:
+                      raise ValueError(f"La colonne '{y_col_requested}' pour l'axe Y n'existe pas.")
+
+                  fig = px.line(df, x=x_col_to_use, y=y_col_requested, title=title, markers=True)
+
+              # --- CAS 2: Le LLM demande un graphique en barres (comparaison de métriques) ---
+              elif chart_type == 'bar':
+                  print("Logique détectée: Graphique en barres (bar chart)")
+
+                  metrics_to_plot = ['roe', 'debttoequity', 'earningsyield', 'marginprofit']
+                  
+                  # On s'assure que les colonnes existent avant de continuer
+                  valid_metrics = [m for m in metrics_to_plot if m in df.columns]
+                  if not valid_metrics:
+                      raise ValueError("Aucune des métriques clés à visualiser n'a été trouvée dans les données.")
+
+                  df_for_bar = df[valid_metrics].iloc[-1].reset_index()
+                  df_for_bar.columns = ['Indicateur', 'Valeur']
+                  
+                  fig = px.bar(df_for_bar, x='Indicateur', y='Valeur', title=title, color='indicateur')
+              
+              # --- CAS 3: Autres types de graphiques (plus simples) ---
+              else:
+                  print(f"Logique détectée: Graphique de type '{chart_type}'")
+                  x_col_requested = tool_args.get('x_column')
+                  y_col_requested = tool_args.get('y_column')
+
+                  if x_col_requested not in df.columns or y_col_requested not in df.columns:
+                      raise ValueError(f"Les colonnes '{x_col_requested}' ou '{y_col_requested}' n'existent pas.")
+                  
+                  if chart_type == 'scatter':
+                      fig = px.scatter(df, x=x_col_requested, y=y_col_requested, title=title)
+                  # Ajoutez d'autres elif pour 'pie', etc. si nécessaire
+                  else:
+                      raise ValueError(f"Le type de graphique '{chart_type}' est demandé mais sa logique n'est pas implémentée ici.")
+
+              # --- Finalisation et envoi ---
+              if fig:
+                  fig.update_layout(template="plotly_white", font=dict(family="Arial, sans-serif"))
+                  chart_json = pio.to_json(fig)
+                  current_state_updates["plotly_json"] = chart_json
+                  tool_outputs.append(ToolMessage(tool_call_id=tool_id, content="[Graphique interactif créé avec succès.]"))
+              else:
+                  raise ValueError("La figure du graphique n'a pas pu être créée.")
+
         except Exception as e:
             error_msg = f"Erreur lors de l'exécution de l'outil '{tool_name}': {repr(e)}"
             tool_outputs.append(ToolMessage(tool_call_id=tool_id, content=json.dumps({"error": error_msg})))
@@ -159,29 +242,29 @@ def execute_tool_node(state: AgentState):
 # ... (imports, y compris pandas as pd et AIMessage)
 
 # Noeud 3 : synthesize_final_answer_node, synthétise la réponse finale à partir de l'état.
-def synthesize_final_answer_node(state: AgentState):
-    """Crée la réponse finale à présenter à l'utilisateur en interprétant le résultat de la prédiction."""
-    print("\n--- AGENT: Synthétisation de la réponse finale ---")
+def generate_final_response_node(state: AgentState):
+    """
+    Génère la réponse textuelle finale ET le graphique Plotly par défaut après une analyse complète.
+    """
+    print("\n--- AGENT: Génération de la réponse finale et du graphique ---")
     ticker = state.get("ticker", "l'action")
     prediction_result = state.get("prediction", "inconnu")
-    image_base64 = state.get("image_base64")
 
-    latest_year_str = "récentes" # Valeur par défaut si l'extraction échoue
+    # Logique pour extraire l'année
+    latest_year_str = "récentes"
+    next_year_str = "prochaine"
+    processed_df = None # Initialisation
     if state.get("processed_df_json"):
         try:
-            # On charge les données qui ont servi à la prédiction
             processed_df = pd.read_json(state["processed_df_json"], orient='split')
             if not processed_df.empty:
-                # On récupère la dernière ligne de l'index (ex: 'AAPL_2024')
                 last_index = processed_df.index[-1]
-                # On extrait l'année
                 latest_year_str = str(last_index).split('_')[-1]
                 next_year_str = str(int(latest_year_str) + 1)
-
         except Exception as e:
             print(f"Avertissement : Impossible d'extraire l'année des données : {e}")
 
-    # On choisit la bonne formulation en fonction du résultat de la prédiction
+    # Logique de la réponse textuelle (identique à l'ancienne)
     if prediction_result == "Risque Élevé Détecté":
         response_content = (
             f"⚠️ **Attention !** En se basant sur les données de **{latest_year_str}** pour l'action **{ticker.upper()}**, mon analyse a détecté des signaux indiquant un **risque élevé de sous-performance pour l'année à venir ({next_year_str})**.\n\n"
@@ -194,22 +277,42 @@ def synthesize_final_answer_node(state: AgentState):
             f"signaux très négatifs, n'en a pas trouvé ici. Mon rôle est de t'aider à éviter une erreur évidente, pas de te garantir un succès."
         )
     else:
-        # Cas par défaut si la prédiction a échoué
-        response_content = f"L'analyse des données de **{latest_year_str}** pour **{ticker.upper()}** a été effectuée, mais le résultat de la prédiction n'a pas pu être interprété."
+        # Cas par défaut si la prédiction a échoué ou est inattendue
+        response_content = f"L'analyse des données de **{latest_year_str}** pour **{ticker.upper()}** a été effectuée, mais le résultat de la prédiction ('{prediction_result}') n'a pas pu être interprété."
 
-    response_content += f"\n\nVoici une visualisation des indicateurs financiers clés de **{latest_year_str}** qui ont servi à cette analyse :"
+    chart_json = None
+    if processed_df is not None and not processed_df.empty:
+        try:
+            metrics_to_plot = ['roe', 'debtToEquity', 'earningsYield', 'marginProfit']
+            chart_title = f"Indicateurs Clés pour {ticker.upper()} ({latest_year_str})"
+            
+            df_for_plot = processed_df[metrics_to_plot].iloc[-1].reset_index()
+            df_for_plot.columns = ['indicateur', 'valeur']
+            
+            # APPEL DIRECT À PLOTLY EXPRESS (la bonne méthode)
+            fig = px.bar(df_for_plot, x='indicateur', y='valeur', title=chart_title, color='indicateur')
+            fig.update_layout(template="plotly_white", font=dict(family="Arial, sans-serif"))
+            chart_json = pio.to_json(fig)
+
+            response_content += f"\n\nVoici une visualisation des indicateurs financiers clés de **{latest_year_str}** qui ont servi à cette analyse :"
+        except Exception as e:
+            print(f"Erreur lors de la création du graphique par défaut : {e}")
+            response_content += "\n\n(Je n'ai pas pu générer le graphique associé en raison d'une erreur.)"
     
     final_message = AIMessage(content=response_content)
-    if image_base64:
-        setattr(final_message, 'image_base64', image_base64)
+    if chart_json and "Error" not in chart_json:
+        setattr(final_message, 'plotly_json', chart_json)
     
     return {"messages": [final_message]}
 
 # Noeud 4 : cleanup_state_node, nettoie l'état pour éviter de stocker des données lourdes.
 def cleanup_state_node(state: AgentState):
-    """Nettoie l'état pour éviter de stocker des données lourdes."""
-    print("\n--- SYSTEM: Nettoyage du state avant la sauvegarde ---")
-    return {"fetched_df_json": "", "processed_df_json": "", "image_base64": "", "prediction": "", "error": ""}
+    """
+    Nettoie l'état pour la prochaine interaction, en ne supprimant que les données
+    spécifiques à la dernière réponse (le graphique) mais en gardant le contexte (les données).
+    """
+    print("\n--- SYSTEM: Nettoyage partiel du state avant la sauvegarde ---")
+    return {"plotly_json": ""}
 
 # Noeud 5 : prepare_data_display_node, prépare les données pour l'affichage en DataFrame
 def prepare_data_display_node(state: AgentState):
@@ -232,7 +335,21 @@ def prepare_data_display_node(state: AgentState):
     setattr(final_message, 'dataframe_json', df_json)
     return {"messages": [final_message]}
 
+def prepare_chart_display_node(state: AgentState):
+    """Prépare un AIMessage avec le graphique Plotly demandé par l'utilisateur."""
+    print("\n--- AGENT: Préparation du graphique pour l'affichage ---")
+    
+    # Laisse le LLM générer une courte phrase d'introduction
+    response = ("Voici le graphgique demandé : ")
+    
+    final_message = AIMessage(content=response.content)
+    setattr(final_message, 'plotly_json', state["plotly_json"])
+    
+    return {"messages": [final_message]}
+
 # --- Router principal pour diriger le flux du graph ---
+# agent.py
+
 def router(state: AgentState) -> str:
     """Le routeur principal du graphe, maintenant plus robuste."""
     print("\n--- ROUTEUR: Évaluation de l'état pour choisir la prochaine étape ---")
@@ -248,24 +365,26 @@ def router(state: AgentState) -> str:
             print("Routeur -> Décision: Erreur détectée, fin du processus.")
             return END
         
-        ai_message_for_tool = next(
-            (msg for msg in reversed(state['messages']) if isinstance(msg, AIMessage) and msg.tool_calls),
-            None
-        )
-        if not ai_message_for_tool:
-            return END
-
+        # Retrouve quel outil a été appelé
+        ai_message_for_tool = next((msg for msg in reversed(state['messages']) if isinstance(msg, AIMessage) and msg.tool_calls), None)
+        if not ai_message_for_tool: return END
         tool_name = ai_message_for_tool.tool_calls[-1]['name']
         
-        if tool_name == 'visualize_data':
-            print(f"Routeur -> Décision: Outil final '{tool_name}' exécuté, passage à la synthèse.")
-            return "synthesize_final_answer"
-            
+        # --- LOGIQUE DE ROUTAGE CORRIGÉE ET EXPLICITE ---
+        if tool_name == 'predict_performance':
+            print(f"Routeur -> Décision: Outil final '{tool_name}' exécuté, passage à la réponse finale.")
+            return "generate_final_response"
+        
         elif tool_name in ['display_raw_data', 'display_processed_data']:
-            print(f"Routeur -> Décision: Outil d'affichage '{tool_name}' exécuté, préparation de l'affichage.")
+            print(f"Routeur -> Décision: Outil d'affichage '{tool_name}' exécuté, préparation de l'affichage des données.")
             return "prepare_data_display"
-            
-        else: # Pour fetch_data, preprocess_data, predict_performance
+
+        # On a besoin d'un nouveau noeud pour présenter le graphique demandé spécifiquement
+        elif tool_name == 'create_dynamic_chart':
+             print(f"Routeur -> Décision: Outil '{tool_name}' exécuté, préparation de l'affichage du graphique.")
+             return "prepare_chart_display" # Note: Assurez-vous d'avoir ce noeud et cette route
+
+        else: # Pour fetch_data, preprocess_data
             print(f"Routeur -> Décision: Outil intermédiaire '{tool_name}' exécuté, retour à l'agent.")
             return "agent"
             
@@ -278,32 +397,30 @@ workflow = StateGraph(AgentState)
 
 workflow.add_node("agent", agent_node)
 workflow.add_node("execute_tool", execute_tool_node)
-workflow.add_node("synthesize_final_answer", synthesize_final_answer_node)
+workflow.add_node("generate_final_response", generate_final_response_node)
 workflow.add_node("cleanup_state", cleanup_state_node)
 workflow.add_node("prepare_data_display", prepare_data_display_node) 
+workflow.add_node("prepare_chart_display", prepare_chart_display_node) 
 
 workflow.set_entry_point("agent")
 
-workflow.add_conditional_edges(
-    "agent",
-    router,
-    {"execute_tool": "execute_tool", "__end__": END}
-)
+workflow.add_conditional_edges("agent", router, {"execute_tool": "execute_tool", "__end__": END})
 workflow.add_conditional_edges(
     "execute_tool",
     router,
     {
         "agent": "agent", 
-        "synthesize_final_answer": "synthesize_final_answer", 
+        "generate_final_response": "generate_final_response",
         "prepare_data_display": "prepare_data_display", 
+        "prepare_chart_display": "prepare_chart_display",
         "__end__": END
     }
 )
 
-workflow.add_edge("synthesize_final_answer", "cleanup_state")
+workflow.add_edge("generate_final_response", "cleanup_state")
 workflow.add_edge("prepare_data_display", END) 
+workflow.add_edge("prepare_chart_display", END)
 workflow.add_edge("cleanup_state", END)
-
 
 app = workflow.compile(checkpointer=memory)
 

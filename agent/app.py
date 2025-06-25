@@ -4,6 +4,8 @@ import os
 import uuid
 import base64
 import pandas as pd
+import plotly.io as pio
+import plotly.graph_objects as go
 # --- Import de l'agent LangGraph ---
 from agent import app
 from langchain_core.messages import HumanMessage, AIMessage, ToolMessage
@@ -37,20 +39,21 @@ for msg in st.session_state.messages:
         with st.chat_message("assistant", avatar=STELLA_AVATAR):
             st.write(msg.content)
 
-            # Logique pour l'image
-            if hasattr(msg, 'image_base64') and msg.image_base64:
-                try:
-                    st.image(base64.b64decode(msg.image_base64), caption="Analyse Financière")
-                except Exception as e:
-                    st.error(f"Impossible d'afficher l'image : {e}")
-
-            # Logique pour le DataFrame
+            # Logique pour le DataFrame (reste inchangée)
             if hasattr(msg, 'dataframe_json') and msg.dataframe_json:
                 try:
                     df = pd.read_json(msg.dataframe_json, orient='split')
                     st.dataframe(df) 
                 except Exception as e:
                     st.error(f"Impossible d'afficher le DataFrame : {e}")
+
+            # --- LOGIQUE DE VISUALISATION UNIQUE ET MISE À JOUR ---
+            if hasattr(msg, 'plotly_json') and msg.plotly_json:
+                try:
+                    fig = go.Figure(pio.from_json(msg.plotly_json))
+                    st.plotly_chart(fig, use_container_width=True)
+                except Exception as e:
+                    st.error(f"Impossible d'afficher le graphique : {e}")
 
     elif isinstance(msg, HumanMessage):
         with st.chat_message("user"):
@@ -66,41 +69,43 @@ if prompt := st.chat_input("Qu'est ce que je peux faire pour toi aujourd'hui ? �
         thinking_placeholder = st.empty()
         thinking_placeholder.write("🧠 Hmm, laisse moi réfléchir...")
 
-        inputs = {"messages": [HumanMessage(content=prompt)]}
+        inputs = {"messages": st.session_state.messages} # On envoie tout l'historique
         config = {"configurable": {"thread_id": st.session_state.session_id}}
         
+        final_response = None
+        
         try:
-            final_message = None
-            # Streame les events depuis le Graph pour arriver au résultat final
+            # On streame les events pour afficher les étapes en temps réel
             for event in app.stream(inputs, config=config, stream_mode="values"):
-                # On met à jour la variable `final_message` à chaque tour
-                final_message = event["messages"][-1]
-
-                # Si le dernier message est une décision de l'IA d'appeler un outil...
-                if isinstance(final_message, AIMessage) and final_message.tool_calls:
-                    tool_name = final_message.tool_calls[0]['name']
-                    
-                    # On met à jour le placeholder avec un message pertinent
+                # `event` est l'état complet du graphe à chaque étape
+                # On cherche la dernière AIMessage qui contient un appel d'outil
+                last_message = event["messages"][-1]
+                if isinstance(last_message, AIMessage) and last_message.tool_calls:
+                    tool_name = last_message.tool_calls[0]['name']
+                    # Logique pour afficher ce que l'agent est en train de faire
+                    ticker = final_message.tool_calls[0]['args'].get('ticker', '')
                     if tool_name == 'fetch_data':
-                        ticker = final_message.tool_calls[0]['args'].get('ticker', '')
                         thinking_placeholder.write(f"🔍 Recherche des données pour **{ticker}**...")
                     elif tool_name == 'preprocess_data':
                         thinking_placeholder.write("⚙️ Préparation des données pour l'analyse...")
                     elif tool_name == 'predict_performance':
                         thinking_placeholder.write("📈 Lancement du modèle de prédiction...")
-                    elif tool_name == 'visualize_data':
-                        thinking_placeholder.write("📊 Création de la visualisation finale...")
+                    elif tool_name == 'create_dynamic_chart':
+                        thinking_placeholder.write("📊 Création de la visualisation demandée...")
+
+                # La réponse finale est la dernière AIMessage SANS appel d'outil
+                if isinstance(last_message, AIMessage) and not last_message.tool_calls:
+                    final_response = last_message
 
             thinking_placeholder.empty()
 
-            if final_message:
-                if isinstance(final_message, AIMessage) and not final_message.tool_calls:
-                    st.session_state.messages.append(final_message)
-                elif isinstance(final_message, ToolMessage):
-                    error_content = f"Une erreur est survenue lors de l'exécution : {final_message.content}"
-                    st.session_state.messages.append(AIMessage(content=error_content))
+            # Une fois le stream terminé, on traite la réponse finale
+            if final_response:
+                st.session_state.messages.append(final_response)
             else:
-                st.session_state.messages.append(AIMessage(content="Désolé, je n'ai pas pu formuler de réponse. 😔"))
+                # Si aucune réponse claire n'est trouvée, on affiche un message par défaut
+                fallback_response = AIMessage(content="Désolé, je n'ai pas pu terminer ma pensée. Peux-tu reformuler ?")
+                st.session_state.messages.append(fallback_response)
 
         except Exception as e:
             thinking_placeholder.empty()
@@ -110,4 +115,5 @@ if prompt := st.chat_input("Qu'est ce que je peux faire pour toi aujourd'hui ? �
             import traceback
             traceback.print_exc()
 
+        # Rafraîchit la page pour afficher le nouveau message ajouté à l'historique
         st.rerun()

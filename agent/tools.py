@@ -1,17 +1,16 @@
 # tools.py
+
 import pandas as pd
+import plotly.express as px
+import plotly.io as pio
 from langchain_core.tools import tool
 
-# --- Import des tools depuis src ---
+# --- Import des logiques de src  ---
 from src.fetch_data import fetch_fundamental_data as _fetch_data_logic
 from src.preprocess import preprocess_financial_data as _preprocess_data_logic
 from src.predict import predict_outperformance as _predict_performance_logic
-from src.visualize import create_prediction_plot as _visualize_data_logic
 
-
-# --- LangChain Tools ---
-# Le LLM voit les décorateurs. La logique de quel outil doit être appelé
-# est gérée par le noeaud `execute_tool` dans `agent.py`.
+# --- Définition des outils ---
 
 @tool
 def fetch_data(ticker: str) -> str:
@@ -20,7 +19,7 @@ def fetch_data(ticker: str) -> str:
 
 @tool
 def preprocess_data() -> str:
-    """Prépare les données financières récupérées pour la prédiction. Pas d'argument attendu"""
+    """Prépare les données financières récupérées pour la prédiction."""
     return "[L'étape de preprocessing est prête à être exécutée.]"
 
 @tool
@@ -29,34 +28,51 @@ def predict_performance() -> str:
     return "[L'étape de prédiction est prête à être exécutée.]"
 
 @tool
-def visualize_data() -> str:
-    """Produit une visualisation des données financières et de la prédiction."""
-    return "[L'étape de visualisation est prête à être  exécutée.]"
-
-@tool
 def display_raw_data() -> str:
-    """
-    Affiche le tableau de données financières brutes qui ont été initialement récupérées.
-    Utilise cet outil si l'utilisateur demande explicitement les 'données brutes' ou les 'données originales'.
-    """
+    """Affiche le tableau de données financières brutes qui ont été initialement récupérées."""
     return "[Le tableau de données brutes est prêt à être affiché.]"
 
 @tool
 def display_processed_data() -> str:
-    """
-    Affiche le tableau de données financières traitées et nettoyées, prêtes pour l'analyse.
-    Utilise cet outil par défaut lorsque l'utilisateur demande 'voir les données', 'montre le tableau', 
-    'affiche les données nettoyées', ou après que l'étape de prétraitement a été annoncée.
-    """
+    """Affiche le tableau de données financières traitées et nettoyées, prêtes pour l'analyse."""
     return "[Le tableau de données traitées est prêt à être affiché.]"
 
 
-# --- MODIFIÉ ---
+@tool
+def create_dynamic_chart(
+    chart_type: str,
+    x_column: str,
+    y_column: str,
+    title: str,
+    color_column: str = None,
+) -> str:
+    """
+    Crée un graphique dynamique et interactif avec Plotly. Les données sont fournies automatiquement.
+
+    IMPORTANT : Le nom de la colonne que tu fournis pour `y_column` DOIT correspondre EXACTEMENT
+    à l'un des noms de la liste de colonnes disponibles qui te sera fournie dans le contexte de la conversation.
+    Ne traduis pas et n'invente pas de noms de colonnes.
+
+    Types de graphiques possibles :
+    - 'line' pour les données chronologiques (ex: évolution d'une métrique sur plusieurs années).
+    - 'bar' pour comparer des catégories ou des valeurs à un instant T.
+    
+    Args:
+        chart_type (str): Le type de graphique à créer.
+        x_column (str): Le nom de la colonne pour l'axe des X (généralement 'year' pour les graphiques en ligne).
+        y_column (str): Le nom EXACT de la colonne pour l'axe des Y, choisi depuis la liste fournie.
+        title (str): Un titre descriptif pour le graphique.
+        color_column (str, optional): La colonne pour colorer les éléments du graphique.
+    """
+    pass
+
+
+# --- La liste complète des outils disponibles pour l'agent ---
 available_tools = [
     fetch_data,
     preprocess_data,
     predict_performance,
-    visualize_data,
-    display_raw_data,       # <-- RENOMMÉ
-    display_processed_data, # <-- NOUVEAU
+    create_dynamic_chart,   # L'unique outil de visualisation
+    display_raw_data,
+    display_processed_data,
 ]
