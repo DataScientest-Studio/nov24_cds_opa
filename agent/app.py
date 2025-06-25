@@ -3,7 +3,7 @@ import streamlit as st
 import os
 import uuid
 import base64
-
+import pandas as pd
 # --- Import de l'agent LangGraph ---
 from agent import app
 from langchain_core.messages import HumanMessage, AIMessage
@@ -42,18 +42,28 @@ for msg in st.session_state.messages:
     if isinstance(msg, AIMessage):
         with st.chat_message("assistant", avatar=STELLA_AVATAR):
             st.write(msg.content)
-            # On vérifie si une image est attachée à ce message
+
+            # Logique pour l'image
             if hasattr(msg, 'image_base64') and msg.image_base64:
                 try:
                     st.image(base64.b64decode(msg.image_base64), caption="Financial Analysis")
                 except Exception as e:
                     st.error(f"Could not display image: {e}")
+
+            # Logique pour le DataFrame
+            if hasattr(msg, 'dataframe_json') and msg.dataframe_json:
+                try:
+                    df = pd.read_json(msg.dataframe_json, orient='split')
+                    st.dataframe(df) 
+                except Exception as e:
+                    st.error(f"Impossible d'afficher le DataFrame : {e}")
+
     elif isinstance(msg, HumanMessage):
         with st.chat_message("user"):
             st.write(msg.content)
 
 # --- Gestion de l'input utilisateur ---
-if prompt := st.chat_input("Commence par me demander comment je fonctionne"):
+if prompt := st.chat_input("Qu'est ce que je peux faire pour toi aujourd'hui ? 😊​"):
     # Ajout du message de l'utilisateur à l'historique pour l'affichage
     st.session_state.messages.append(HumanMessage(content=prompt))
     with st.chat_message("user"):

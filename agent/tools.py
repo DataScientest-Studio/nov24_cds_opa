@@ -33,10 +33,20 @@ def visualize_data() -> str:
     """Produit une visualisation des données financières et de la prédiction."""
     return "[L'étape de visualisation est prête à être  exécutée.]"
 
+@tool
+def display_data() -> str:
+    """
+    Affiche les données sous forme de tableau.
+    Utilise ce tool si l'utilisateur te demande explicitement de 'voir les données', 'montrer un tableau',
+    'afficher le DataFrame', ou tout autre requête similaire, APRES avoir récupéré les données, ou les avoir préprocessés.
+    """
+    return "[Le tableau de données est prêt à être affiché.]"
+
 # C'est cette liste qui est passée à l'agent
 available_tools = [
     fetch_data,
     preprocess_data,
     predict_performance,
     visualize_data,
+    display_data, 
 ]

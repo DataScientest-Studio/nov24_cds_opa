@@ -50,10 +50,15 @@ class AgentState(TypedDict):
 system_prompt = """Ton nom est Stella. Tu es une assistante experte financière. Ton but principal est d'aider les utilisateurs en analysant des stocks.
 
 Quand un utilisateur te demande d'analyser un stock, tu DOIS suivre une séquence d'actions prédéfinie pour fournir une analyse complète :
-1. Prmièrement, tu dois appeler le tool `fetch_data` avec le ticker correspondant à la demande de l'utilisateur.
+1. Premièrement, tu dois appeler le tool `fetch_data` avec le ticker correspondant à la demande de l'utilisateur.
 2. Deuxièmement, tu dois appeler le tool `preprocess_data` pour préparer les données récupérées.
 3. Troisièmement, tu dois appeler le tool `predict_performance` pour prédire la performance du stock.
 4. Enfin, tu dois appeler le tool `visualize_data` pour compléter l'analyse.
+
+Tu as également un tool `display_data`. Si un utilisateur te demande de 'voir les données', 'montrer le tableau', ou 'afficher le DataFrame' APRES qu'une analyse ait été effectuée pour un stock, tu dois appeler ce tool. 
+Cela affichera à l'utilisateur le tableau de données.
+Tu peux utiliser ce tool pour afficher les données brutes (récupérées avec fetch_data), ou les données préprocessées (après le tool preprocess_data).
+C'est une action distincte de l'analyse complète.
 
 Ta tâche sera complète uniquement après que le tool `visualize_data` ait été appelé. Si tu rencontres une erreur, informe l'utilisateur.
 Tu dois toujours répondre en français. Tu ne dois pas faire de suppositions sur les données financières, tu dois te baser uniquement sur les données récupérées par le tool `fetch_data`.
@@ -124,6 +129,12 @@ def execute_tool_node(state: AgentState):
                 current_state_updates["image_base64"] = image_output
                 tool_outputs.append(ToolMessage(tool_call_id=tool_id, content="[L'image a été générée avec succès.]"))
 
+            elif tool_name == "display_data":
+                if not state.get("fetched_df_json"):
+                     tool_outputs.append(ToolMessage(tool_call_id=tool_id, content="Erreur: Aucune donnée disponible à l'affichage."))
+                else:
+                    tool_outputs.append(ToolMessage(tool_call_id=tool_id, content="[L'affichage des données est en préparation.]"))
+
         except Exception as e:
             error_msg = f"Erreur lors de l'exécution du tool: '{tool_name}': {repr(e)}"
             tool_outputs.append(ToolMessage(tool_call_id=tool_id, content=json.dumps({"erreur": error_msg})))
@@ -160,30 +171,48 @@ def cleanup_state_node(state: AgentState):
     # Set the JSON strings to empty or None to clear memory
     return {"fetched_df_json": "", "processed_df_json": ""}
 
+# Noeud 5 : prepare_data_display_node, prépare les données pour l'affichage en DataFrame
+def prepare_data_display_node(state: AgentState):
+    """Prépare un AIMessage avec le DatFrame récupéré sous forme d'un JSON attaché."""
+    print("\n--- AGENT: Préparation du DataFrame pour affichage ---")
+    df = pd.read_json(state["fetched_df_json"], orient='split')
+    df_json = df.to_json(orient='split')
+    final_message = AIMessage(content="Voici les données que vous avez demandées :")
+    setattr(final_message, 'dataframe_json', df_json) # On attache le DF en JSON
+    return {"messages": [final_message]}
+
 # --- Router principal pour diriger le flux du graph ---
 def router(state: AgentState) -> str:
-    """Le router du graph."""
+    """The primary router for the graph."""
     last_message = state['messages'][-1]
     if isinstance(last_message, AIMessage) and last_message.tool_calls:
         return "execute_tool"
+        
     if isinstance(last_message, ToolMessage):
         if state.get("error"):
-            return END # Or a dedicated error handling node
+            return END
+        
         ai_message_before = state['messages'][-2]
-        if ai_message_before.tool_calls[0]['name'] == 'visualize_data':
+        tool_name = ai_message_before.tool_calls[0]['name']
+
+        if tool_name == 'visualize_data':
             return "synthesize_final_answer"
-        return "agent"
-    print("\n--- AGENT: Affichage du message final à l'utilisateur ---")
+        elif tool_name == 'display_data':
+            return "prepare_data_display" 
+        else:
+            return "agent"
+            
     return END
 
-# --- Workflow de l'agent (structure des "edges" et "nodes" du Graph) ---
+# --- CONSTRUCTION DU GRAPH ---
 memory = MemorySaver()
 workflow = StateGraph(AgentState)
 
 workflow.add_node("agent", agent_node)
 workflow.add_node("execute_tool", execute_tool_node)
 workflow.add_node("synthesize_final_answer", synthesize_final_answer_node)
-workflow.add_node("cleanup_state", cleanup_state_node) 
+workflow.add_node("cleanup_state", cleanup_state_node)
+workflow.add_node("prepare_data_display", prepare_data_display_node) 
 
 workflow.set_entry_point("agent")
 
@@ -195,11 +224,16 @@ workflow.add_conditional_edges(
 workflow.add_conditional_edges(
     "execute_tool",
     router,
-    {"agent": "agent", "synthesize_final_answer": "synthesize_final_answer", "__end__": END}
+    {
+        "agent": "agent", 
+        "synthesize_final_answer": "synthesize_final_answer", 
+        "prepare_data_display": "prepare_data_display", 
+        "__end__": END
+    }
 )
 
-# Après la synthèse de la réponse finale, on nettoie puis on appelle END.
 workflow.add_edge("synthesize_final_answer", "cleanup_state")
+workflow.add_edge("prepare_data_display", "cleanup_state")
 workflow.add_edge("cleanup_state", END)
 
 
