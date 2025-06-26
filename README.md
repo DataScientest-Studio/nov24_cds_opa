@@ -34,22 +34,22 @@ Organisation du projet
 
 Mise en place de l'envrionnement 
 ------------
-Installer Miniconda : 
+Installer Miniconda :  
 https://www.anaconda.com/docs/getting-started/miniconda/install
 
-Vérfier l'installation : 
+Vérfier l'installation :  
     conda --version
 
-Pour créer l'environnement de l'agent contenant les dépendances : 
+Pour créer l'environnement de l'agent contenant les dépendances :  
     conda env create -f environment.yml -n agent
 
 Lancement de l'agent
 ------------
 
-Activer l'envrionnement pour la session en cours : 
+Activer l'envrionnement pour la session en cours :  
     conda activate agent
 
-Lancer l'application Streamlit : 
+Lancer l'application Streamlit :  
     streamlit run agent/app.y
-
-![Workflow de l'agent](agent_worlflow.png)
+  
+![Workflow de l'agent](agent_workflow.png)
