@@ -28,7 +28,7 @@ def get_image_as_base64(path):
 STELLA_AVATAR = "assets/avatar_stella.png" # Chemin vers l'avatar de Stella
 
 st.set_page_config(page_title="Assistant financier IA", page_icon="📈", layout="wide")
-st.title("📈 Assistant financier IA")
+st.title("📈 Analyste financier IA")
 
 # --- Initialisation du session_state pour les messages et d'un ID de session unique ---
 if "messages" not in st.session_state:
