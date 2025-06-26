@@ -38,18 +38,20 @@ Installer Miniconda :
 https://www.anaconda.com/docs/getting-started/miniconda/install
 
 Vérfier l'installation :  
-    conda --version
+```conda --version```
 
 Pour créer l'environnement de l'agent contenant les dépendances :  
-    conda env create -f environment.yml -n agent
+```conda env create -f environment.yml -n agent```
 
 Lancement de l'agent
 ------------
 
 Activer l'envrionnement pour la session en cours :  
-    conda activate agent
+```conda activate agent```
 
 Lancer l'application Streamlit :  
-    streamlit run agent/app.y
-  
+```streamlit run agent/app.y```
+
+Workflow de l'agent
+------------
 ![Workflow de l'agent](agent_workflow.png)
