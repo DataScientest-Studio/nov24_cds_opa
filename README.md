@@ -36,6 +36,7 @@ Organisation du projet
 Workflow de l'agent
 ------------
 ![Workflow de l'agent](agent_workflow.png)
+  
 
 Mise en place de l'envrionnement 
 ------------
@@ -51,6 +52,7 @@ https://www.anaconda.com/docs/getting-started/miniconda/install
 ### Pour créer l'environnement de l'agent contenant les dépendances
   
 ```conda env create -f environment.yml -n agent```
+  
 
 Obtention des clefs API
 ------------
@@ -63,28 +65,34 @@ https://openrouter.ai/settings/keys
 ### Obtenir une clef API Financial Modeling Prep
 Financial Modeling Prep est le fournisseur de données financières :  
 https://site.financialmodelingprep.com/developer/docs/dashboard
+  
 
 Ajout des variables d'envrionnement 
 ------------
 ### Sur Windows
   
 ```[System.Environment]::SetEnvironmentVariable("OPENROUTER_API_KEY", "ma_clef_api_openrouter", "nom_de_l'utilisateur")```
+  
 ```[System.Environment]::SetEnvironmentVariable("OPENROUTER_API_KEY", "ma_clef_api_fmp", "nom_de_l'utilisateur")```
 
 ### Sur Linux / anciens macOS
 
 ```nano ~/.bashrc```
   
-Ajouter ces deux lignes dans le fichier 
+Ajouter ces deux lignes dans le fichier
+   
 ```export OPENROUTER_API_KEY="ma_clef_api"```
+  
 ```export FMP_API_KEY="ma_clef_api"```
 
 ### Sur macOS (récent)
   
 ```nano ~/.zshrc```
   
-Ajouter ces deux lignes dans le fichier 
+Ajouter ces deux lignes dans le fichier
+  
 ```export OPENROUTER_API_KEY="ma_clef_api_openrouter"```
+  
 ```export FMP_API_KEY="ma_clef_api_fmp"```
 
 Lancement de l'agent
