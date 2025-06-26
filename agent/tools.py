@@ -11,6 +11,7 @@ from src.search_ticker import search_ticker as _search_ticker_logic
 from src.fetch_data import fetch_fundamental_data as _fetch_data_logic
 from src.preprocess import preprocess_financial_data as _preprocess_data_logic
 from src.predict import predict_outperformance as _predict_performance_logic
+from src.fetch_news import fetch_recent_news as _fetch_recent_news_logic
 
 # --- Définition des outils ---
 @tool
@@ -115,12 +116,23 @@ def create_dynamic_chart(
     # La logique réelle est appelée depuis execute_tool_node dans agent.py.
     return "[L'outil de création de graphique est prêt à être exécuté par le système.]"
 
-
+@tool
+def get_stock_news(ticker: str) -> str:
+    """
+    Utilise cet outil pour trouver les dernières actualités financières.
+    Il fonctionne mieux si on lui fournit à la fois le ticker et le nom de l'entreprise.
+    
+    Args:
+        ticker (str): Le ticker de l'action (ex: 'AAPL').
+        company_name (str, optional): Le nom de l'entreprise (ex: 'Apple').
+    """
+    return "[Les actualités sont prêtes à être récupérées par le système.]"
 
 # --- La liste complète des outils disponibles pour l'agent ---
 available_tools = [
     search_ticker,
     fetch_data,
+    get_stock_news,
     preprocess_data,
     predict_performance,
     display_raw_data,

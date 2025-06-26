@@ -81,9 +81,9 @@ Ajout des variables d'envrionnement
   
 Ajouter ces deux lignes dans le fichier
    
-```export OPENROUTER_API_KEY="ma_clef_api"```
+```export OPENROUTER_API_KEY="ma_clef_api_openrouter"```
   
-```export FMP_API_KEY="ma_clef_api"```
+```export FMP_API_KEY="ma_clef_api_fmp"```
 
 ### Sur macOS (récent)
   

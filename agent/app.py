@@ -7,6 +7,7 @@ import pandas as pd
 import plotly.io as pio
 import plotly.graph_objects as go
 from io import StringIO
+import json
 
 
 # --- Import de l'agent LangGraph ---
@@ -67,6 +68,22 @@ for msg in st.session_state.messages:
                 except Exception as e:
                     st.error(f"Impossible d'afficher le graphique : {e}")
 
+            # --- Logique pour les News ---
+            if hasattr(msg, 'news_json') and msg.news_json:
+                try:
+                    news_articles = json.loads(msg.news_json)
+                    if not news_articles:
+                        st.info("Je n'ai trouvé aucune actualité récente.")
+                    else:
+                        for article in news_articles:
+                            with st.expander(f"📰 {article['title']}"):
+                                if article.get('image'):
+                                    st.image(article['image'])
+                                st.markdown(f"**Source:** {article.get('site', 'N/A')}")
+                                st.markdown(f"[Lire l'article complet]({article['url']})", unsafe_allow_html=True)
+                except Exception as e:
+                    st.error(f"Impossible d'afficher les actualités : {e}")
+
     elif isinstance(msg, HumanMessage):
         with st.chat_message("user"):
             st.write(msg.content)
@@ -101,6 +118,8 @@ if prompt := st.chat_input("Qu'est ce que je peux faire pour toi aujourd'hui ? �
                         thinking_placeholder.write(f"🔍 Recherche du ticker pour **{company_name}**...")
                     elif tool_name == 'fetch_data':
                         thinking_placeholder.write(f"🔍 Recherche des données pour **{ticker}**...")
+                    elif tool_name == 'get_stock_news':
+                        thinking_placeholder.write(f"📰 Recherche des news pour **{ticker}**...")
                     elif tool_name == 'preprocess_data':
                         thinking_placeholder.write("⚙️ Préparation des données pour l'analyse...")
                     elif tool_name == 'predict_performance':
@@ -119,7 +138,7 @@ if prompt := st.chat_input("Qu'est ce que je peux faire pour toi aujourd'hui ? �
                 st.session_state.messages.append(final_response)
             else:
                 # Si aucune réponse claire n'est trouvée, on affiche un message par défaut
-                fallback_response = AIMessage(content="Désolé, je n'ai pas pu terminer ma pensée. Peux-tu reformuler ?")
+                fallback_response = AIMessage(content="Je suis vraiment désolée, j'ai rencontrée une erreur. Vérifie les logs, ou contacte un admin !")
                 st.session_state.messages.append(fallback_response)
 
         except Exception as e:

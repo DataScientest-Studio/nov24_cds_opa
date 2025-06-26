@@ -19,6 +19,7 @@ from langgraph.checkpoint.memory import MemorySaver
 # --- Import des tools ---
 from tools import (
     available_tools,
+    _fetch_recent_news_logic,
     _search_ticker_logic,
     _fetch_data_logic, 
     _preprocess_data_logic, 
@@ -45,6 +46,7 @@ llm = ChatOpenAI(
 class AgentState(TypedDict):
     input: str
     ticker: str
+    company_name: str
     fetched_df_json: str
     processed_df_json: str
     prediction: str
@@ -65,6 +67,7 @@ system_prompt = """Ton nom est Stella. Tu es une assistante experte financière.
 5. `display_raw_data`: Affiche le tableau de données financières brutes qui ont été initialement récupérées.
 6. `display_processed_data`: Affiche le tableau de données financières traitées et nettoyées, prêtes pour l'analyse.
 7. `create_dynamic_chart`: Crée un graphique interactif basé sur les données financières prétraitées.
+8. `get_stock_news`: Récupère les dernières actualités pour un ticker donné.
 
 **Séquence d'analyse complète**
 Quand un utilisateur te demande une analyse complète, tu DOIS suivre cette séquence d'outils :
@@ -94,45 +97,23 @@ Pour cela, tu dois impérativement connaître la structure des données que tu m
 - Si `predict_performance` renvoie "Risque Élevé Détecté", présente cela comme un avertissement clair.
 - Si `predict_performance` renvoie "Aucun Risque Extrême Détecté", explique que cela n'est PAS une recommandation d'achat, mais simplement l'absence de signaux de danger majeurs.
 
+**Actualités :**
+Si l'utilisateur demande "les nouvelles", "les actualités" ou "ce qui se passe" pour une entreprise, utilise l'outil `get_stock_news`. 
+Tu peux aussi proposer de le faire après une analyse complète.
+
 Tu dois toujours répondre en français et tutoyer ton interlocuteur.
 """
 # --- Définition des noeuds du Graph ---
 
 # Noeud 1 : agent_node, point d'entrée
+# agent.py
+
 def agent_node(state: AgentState):
     """Le 'cerveau' de l'agent. Décide le prochain outil à appeler."""
     print("\n--- AGENT: Décision de la prochaine étape... ---")
     
-    # Prépare le prompt système de base
-    messages = [SystemMessage(content=system_prompt)]
+    response = llm.bind_tools(available_tools).invoke(state['messages'])
     
-    # --- INJECTION DE CONTEXTE DYNAMIQUE ---
-    # Vérifie si des données prétraitées existent dans l'état
-    if state.get("processed_df_json"):
-        try:
-            # Charge les colonnes disponibles à partir des données
-            df = pd.read_json(StringIO(state["processed_df_json"]), orient='split')
-            available_columns = df.columns.tolist()
-            
-            # Crée un message de contexte à injecter
-            context_message = HumanMessage(
-                content=f"""
-                CONTEXTE IMPORTANT POUR TA PROCHAINE ACTION :
-                Des données sont disponibles pour l'action '{state.get('ticker', '')}'.
-                Les noms de colonnes EXACTS que tu peux utiliser pour les graphiques sont : {available_columns}.
-                Quand tu utilises l'outil `create_dynamic_chart`, tu DOIS choisir un nom de colonne dans cette liste pour l'argument `y_column`.
-                """
-            )
-            # Ajoute ce contexte juste avant les messages de l'utilisateur
-            messages.append(context_message)
-        except Exception as e:
-            print(f"Avertissement : Impossible d'injecter le contexte des colonnes. Erreur : {e}")
-
-    # Ajoute le reste de l'historique des messages
-    messages.extend(state['messages'])
-
-    # Invoque le LLM avec le contexte enrichi
-    response = llm.bind_tools(available_tools).invoke(messages)
     return {"messages": [response]}
 
 # Noeud 2 : execute_tool_node, exécute les outils en se basant sur la décision de l'agent_node (Noeud 1).
@@ -155,10 +136,12 @@ def execute_tool_node(state: AgentState):
 
         try:
             if tool_name == "search_ticker":
-                ticker = _search_ticker_logic(company_name=tool_args.get("company_name"))
-                # On met à jour l'état de l'agent avec le ticker trouvé
+                company_name = tool_args.get("company_name")
+                ticker = _search_ticker_logic(company_name=company_name)
+                # On stocke le ticker ET le nom de l'entreprise
                 current_state_updates["ticker"] = ticker
-                tool_outputs.append(ToolMessage(tool_call_id=tool_id, content=f"[Ticker '{ticker}' trouvé avec succès. Je vais maintenant récupérer les données.]"))
+                current_state_updates["company_name"] = company_name 
+                tool_outputs.append(ToolMessage(tool_call_id=tool_id, content=f"[Ticker '{ticker}' trouvé.]"))
 
             elif tool_name == "fetch_data":
                 try:
@@ -170,7 +153,21 @@ def execute_tool_node(state: AgentState):
                     user_friendly_error = "Désolé, il semble que j'aie un problème d'accès à mon fournisseur de données. Peux-tu réessayer plus tard ?"
                     tool_outputs.append(ToolMessage(tool_call_id=tool_id, content=json.dumps({"error": user_friendly_error})))
                     current_state_updates["error"] = user_friendly_error
+            
+            elif tool_name == "get_stock_news":
+                ticker = state.get("ticker")
+                company_name = state.get("company_name") or ticker
+                
+                if not ticker:
+                    raise ValueError("Aucun ticker trouvé dans l'état pour chercher des nouvelles.")
+                
+                news_summary = _fetch_recent_news_logic(
+                    ticker=ticker, 
+                    company_name=company_name
+                )
 
+                tool_outputs.append(ToolMessage(tool_call_id=tool_id, content=news_summary))
+                
             elif tool_name == "preprocess_data":
                 if not state.get("fetched_df_json"):
                     raise ValueError("Impossible de prétraiter les données car elles n'ont pas encore été récupérées.")
@@ -237,62 +234,75 @@ def execute_tool_node(state: AgentState):
 def generate_final_response_node(state: AgentState):
     """
     Génère la réponse textuelle finale ET le graphique Plotly par défaut après une analyse complète.
+    Ce noeud est le point de sortie pour une analyse de prédiction.
     """
     print("\n--- AGENT: Génération de la réponse finale et du graphique ---")
+    
+    # --- 1. Récupération des informations de l'état ---
     ticker = state.get("ticker", "l'action")
     prediction_result = state.get("prediction", "inconnu")
+    processed_df_json = state.get("processed_df_json")
 
-    # Logique pour extraire l'année
+    # --- 2. Construction de la réponse textuelle ---
+    response_content = ""
     latest_year_str = "récentes"
     next_year_str = "prochaine"
-    processed_df = None # Initialisation
-    if state.get("processed_df_json"):
+    
+    if processed_df_json:
         try:
-            processed_df = pd.read_json(StringIO(state["processed_df_json"]), orient='split')
-            if not processed_df.empty:
-                last_index = processed_df.index[-1]
-                latest_year_str = str(last_index).split('_')[-1]
+            df = pd.read_json(StringIO(processed_df_json), orient='split')
+            if not df.empty and 'calendarYear' in df.columns:
+                latest_year_str = df['calendarYear'].iloc[-1]
                 next_year_str = str(int(latest_year_str) + 1)
         except Exception as e:
             print(f"Avertissement : Impossible d'extraire l'année des données : {e}")
 
-    # Logique de la réponse textuelle (identique à l'ancienne)
+    # Logique de la réponse textuelle basée sur la prédiction
     if prediction_result == "Risque Élevé Détecté":
         response_content = (
-            f"⚠️ **Attention !** En se basant sur les données de **{latest_year_str}** pour l'action **{ticker.upper()}**, mon analyse a détecté des signaux indiquant un **risque élevé de sous-performance pour l'année à venir ({next_year_str})**.\n\n"
-            f"Mon modèle est particulièrement confiant dans cette évaluation. Je te conseille la plus grande prudence."
+            f"⚠️ **Attention !** Pour l'action **{ticker.upper()}**, en se basant sur les données de **{latest_year_str}**, mon analyse a détecté des signaux indiquant un **risque élevé de sous-performance pour l'année à venir ({next_year_str})**.\n\n"
+            "Mon modèle est particulièrement confiant dans cette évaluation. Je te conseille la plus grande prudence."
         )
     elif prediction_result == "Aucun Risque Extrême Détecté":
         response_content = (
-            f"En se basant sur les données de **{latest_year_str}** pour l'action **{ticker.upper()}**, mon analyse n'a **pas détecté de signaux de danger extrême pour l'année à venir ({next_year_str})**.\n\n"
-            f"**Important :** Cela ne signifie pas que c'est un bon investissement. Cela veut simplement dire que mon modèle, qui est spécialisé dans la détection de "
-            f"signaux très négatifs, n'en a pas trouvé ici. Mon rôle est de t'aider à éviter une erreur évidente, pas de te garantir un succès."
+            f"Pour l'action **{ticker.upper()}**, en se basant sur les données de **{latest_year_str}**, mon analyse n'a **pas détecté de signaux de danger extrême pour l'année à venir ({next_year_str})**.\n\n"
+            "**Important :** Cela ne signifie pas que c'est un bon investissement. Cela veut simplement dire que mon modèle, spécialisé dans la détection de signaux très négatifs, n'en a pas trouvé ici. Mon rôle est de t'aider à éviter une erreur évidente, pas de te garantir un succès."
         )
     else:
-        # Cas par défaut si la prédiction a échoué ou est inattendue
-        response_content = f"L'analyse des données de **{latest_year_str}** pour **{ticker.upper()}** a été effectuée, mais le résultat de la prédiction ('{prediction_result}') n'a pas pu être interprété."
+        response_content = f"L'analyse des données pour **{ticker.upper()}** a été effectuée, mais le résultat de la prédiction n'a pas pu être interprété."
 
+    # --- 3. Création du graphique de synthèse ---
     chart_json = None
-    if processed_df is not None and not processed_df.empty:
+    if processed_df_json:
         try:
+            df = pd.read_json(StringIO(processed_df_json), orient='split')
             metrics_to_plot = ['roe', 'debtToEquity', 'earningsYield', 'marginProfit']
-            chart_title = f"Indicateurs Clés pour {ticker.upper()} ({latest_year_str})"
             
-            df_for_plot = processed_df[metrics_to_plot].iloc[-1].reset_index()
-            df_for_plot.columns = ['indicateur', 'valeur']
+            # On s'assure que les colonnes existent avant de les utiliser
+            plot_cols = [col for col in metrics_to_plot if col in df.columns]
             
-            # APPEL DIRECT À PLOTLY EXPRESS (la bonne méthode)
-            fig = px.bar(df_for_plot, x='indicateur', y='valeur', title=chart_title, color='indicateur')
-            fig.update_layout(template="plotly_white", font=dict(family="Arial, sans-serif"))
-            chart_json = pio.to_json(fig)
+            if not df.empty and plot_cols:
+                chart_title = f"Indicateurs Clés pour {ticker.upper()} ({latest_year_str})"
+                
+                # Préparation des données pour le bar chart
+                df_for_plot = df[plot_cols].iloc[-1].reset_index()
+                df_for_plot.columns = ['Indicateur', 'Valeur']
+                
+                fig = px.bar(df_for_plot, x='Indicateur', y='Valeur', title=chart_title, color='Indicateur',
+                             text_auto='.2f') # Affiche les valeurs sur les barres
+                fig.update_layout(template="plotly_white", font=dict(family="Arial, sans-serif"), showlegend=False)
+                chart_json = pio.to_json(fig)
+                response_content += f"\n\nVoici une visualisation des indicateurs qui ont servi à cette analyse :"
+            else:
+                response_content += "\n\n(Impossible de générer le graphique : données ou colonnes manquantes)."
 
-            response_content += f"\n\nVoici une visualisation des indicateurs financiers clés de **{latest_year_str}** qui ont servi à cette analyse :"
         except Exception as e:
             print(f"Erreur lors de la création du graphique par défaut : {e}")
             response_content += "\n\n(Je n'ai pas pu générer le graphique associé en raison d'une erreur.)"
     
+    # --- 4. Création du message final ---
     final_message = AIMessage(content=response_content)
-    if chart_json and "Error" not in chart_json:
+    if chart_json:
         setattr(final_message, 'plotly_json', chart_json)
     
     return {"messages": [final_message]}
@@ -339,49 +349,83 @@ def prepare_chart_display_node(state: AgentState):
     
     return {"messages": [final_message]}
 
+def prepare_news_display_node(state: AgentState):
+    """Prépare un AIMessage avec les actualités formatées pour l'affichage."""
+    print("\n--- AGENT: Préparation de l'affichage des actualités ---")
+    
+    # 1. Retrouver le ToolMessage qui contient le résultat des actualités
+    # On cherche le dernier message de type ToolMessage dans l'historique
+    tool_message = next((msg for msg in reversed(state['messages']) if isinstance(msg, ToolMessage)), None)
+    
+    if not tool_message or not tool_message.content:
+        final_message = AIMessage(content="Désolé, je n'ai pas pu récupérer les actualités.")
+        return {"messages": [final_message]}
+
+    # 2. Préparer le contenu textuel de la réponse
+    ticker = state.get("ticker", "l'entreprise")
+    company_name = state.get("company_name", ticker)
+    
+    response_content = f"Voici les dernières actualités que j'ai trouvées pour **{company_name.title()} ({ticker.upper()})** :"
+    
+    final_message = AIMessage(content=response_content)
+    
+    # 3. Attacher le JSON des actualités au message final
+    # Le front-end (Streamlit) utilisera cet attribut pour afficher les articles
+    setattr(final_message, 'news_json', tool_message.content)
+    
+    return {"messages": [final_message]}
+
 # --- Router principal pour diriger le flux du graph ---
+
 # agent.py
 
 def router(state: AgentState) -> str:
-    """Le routeur principal du graphe, maintenant plus robuste."""
+    """Le routeur principal du graphe, version finale robuste."""
     print("\n--- ROUTEUR: Évaluation de l'état pour choisir la prochaine étape ---")
+
+    # On récupère les messages de l'état
+    messages = state['messages']
     
-    last_message = state['messages'][-1]
+    # Y a-t-il une erreur ? C'est la priorité absolue.
+    if state.get("error"):
+        print("Routeur -> Décision: Erreur détectée, fin du processus.")
+        return END
 
+    # Le dernier message est-il une décision de l'IA d'appeler un outil ?
+    last_message = messages[-1]
     if isinstance(last_message, AIMessage) and last_message.tool_calls:
-        print("Routeur -> Décision: Exécuter un outil.")
+        # C'est la première fois qu'on voit cette décision, on doit exécuter l'outil.
+        print("Routeur -> Décision: Appel d'outil demandé, passage à execute_tool.")
         return "execute_tool"
-        
-    if isinstance(last_message, ToolMessage):
-        if state.get("error"):
-            print("Routeur -> Décision: Erreur détectée, fin du processus.")
-            return END
-        
-        # Retrouve quel outil a été appelé
-        ai_message_for_tool = next((msg for msg in reversed(state['messages']) if isinstance(msg, AIMessage) and msg.tool_calls), None)
-        if not ai_message_for_tool: return END
-        tool_name = ai_message_for_tool.tool_calls[-1]['name']
-        
-        if tool_name == 'predict_performance':
-            print(f"Routeur -> Décision: Outil final '{tool_name}' exécuté, passage à la réponse finale.")
-            return "generate_final_response"
-        
-        elif tool_name in ['display_raw_data', 'display_processed_data']:
-            print(f"Routeur -> Décision: Outil d'affichage '{tool_name}' exécuté, préparation de l'affichage des données.")
-            return "prepare_data_display"
 
-        # On a besoin d'un nouveau noeud pour présenter le graphique demandé spécifiquement
-        elif tool_name == 'create_dynamic_chart':
-             print(f"Routeur -> Décision: Outil '{tool_name}' exécuté, préparation de l'affichage du graphique.")
-             return "prepare_chart_display" # Note: Assurez-vous d'avoir ce noeud et cette route
+    # Si le dernier message n'est PAS un appel à un outil, cela signifie probablement
+    # qu'un outil vient de s'exécuter. Nous devons décider où aller ensuite.
+    
+    # On retrouve le dernier appel à un outil fait par l'IA
+    ai_message_with_tool_call = next(
+        (msg for msg in reversed(messages) if isinstance(msg, AIMessage) and msg.tool_calls),
+        None
+    )
+    # S'il n'y en a pas, on ne peut rien faire de plus.
+    if not ai_message_with_tool_call:
+        print("Routeur -> Décision: Aucune action claire à prendre (pas d'appel d'outil trouvé), fin du processus.")
+        return END
+        
+    tool_name = ai_message_with_tool_call.tool_calls[-1]['name']
+    print(f"--- DEBUG ROUTEUR: Le dernier outil appelé était '{tool_name}'. ---")
 
-        else: # Pour fetch_data, preprocess_data
-            print(f"Routeur -> Décision: Outil intermédiaire '{tool_name}' exécuté, retour à l'agent.")
-            return "agent"
-            
-    print("Routeur -> Décision: Fin du processus.")
-    return END
-
+    # Maintenant, on décide de la suite en fonction de cet outil.
+    if tool_name == 'predict_performance':
+        return "generate_final_response"
+    elif tool_name in ['display_raw_data', 'display_processed_data']:
+        return "prepare_data_display"
+    elif tool_name == 'create_dynamic_chart':
+        return "prepare_chart_display"
+    elif tool_name == 'get_stock_news':
+        return "prepare_news_display"
+    else: # Pour search_ticker, fetch_data, preprocess_data
+        return "agent"
+    
 # --- CONSTRUCTION DU GRAPH ---
 memory = MemorySaver()
 workflow = StateGraph(AgentState)
@@ -391,7 +435,8 @@ workflow.add_node("execute_tool", execute_tool_node)
 workflow.add_node("generate_final_response", generate_final_response_node)
 workflow.add_node("cleanup_state", cleanup_state_node)
 workflow.add_node("prepare_data_display", prepare_data_display_node) 
-workflow.add_node("prepare_chart_display", prepare_chart_display_node) 
+workflow.add_node("prepare_chart_display", prepare_chart_display_node)
+workflow.add_node("prepare_news_display", prepare_news_display_node)
 
 workflow.set_entry_point("agent")
 
@@ -404,6 +449,7 @@ workflow.add_conditional_edges(
         "generate_final_response": "generate_final_response",
         "prepare_data_display": "prepare_data_display", 
         "prepare_chart_display": "prepare_chart_display",
+        "prepare_news_display": "prepare_news_display", 
         "__end__": END
     }
 )
@@ -411,6 +457,7 @@ workflow.add_conditional_edges(
 workflow.add_edge("generate_final_response", "cleanup_state")
 workflow.add_edge("prepare_data_display", END) 
 workflow.add_edge("prepare_chart_display", END)
+workflow.add_edge("prepare_news_display", END)
 workflow.add_edge("cleanup_state", END)
 
 app = workflow.compile(checkpointer=memory)
