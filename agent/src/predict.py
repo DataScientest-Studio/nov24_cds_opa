@@ -6,7 +6,7 @@ import os
 import numpy as np # Assurez-vous que numpy est importé
 
 # Le chemin vers votre modèle
-MODEL_PATH = 'random_forest_model.joblib' 
+MODEL_PATH = 'models/rf_fundamental_market_classifier.joblib' 
 
 def predict_outperformance(processed_data: pd.DataFrame) -> str:
     """

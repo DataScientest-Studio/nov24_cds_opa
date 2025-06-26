@@ -1,45 +1,55 @@
-Project Name
+Projet OPA - Agent Analyste financier
 ==============================
 
-This repo is a Starting Pack for DS projects. You can rearrange the structure to make it fits your project.
+Ce repo est un projet de fin d'étude réalisé dans le cadre du cursus Data Scientist chez DataScientest et l'Ecole des Mines Paris par Jerry PETILAIRE, Gilles LENY, Samuel LEE KWET SUN et Mathis GENTHON
 
-Project Organization
+Organisation du projet
 ------------
 
     ├── LICENSE
-    ├── README.md          <- The top-level README for developers using this project.
-    ├── data               <- Should be in your computer but not on Github (only in .gitignore)
-    │   ├── processed      <- The final, canonical data sets for modeling.
-    │   └── raw            <- The original, immutable data dump.
+    ├── README.md          <- Le README décrivant le projet
+    ├── environment.yml    <- Le fichier yml permettant de copier l'environnement conda nécessaire à l'exécution du projet.
     │
-    ├── models             <- Trained and serialized models, model predictions, or model summaries
+    ├── notebooks          <- Tous les notebooks et données utilsés pendant la phase de recherche
+    │   ├── csv            <- Les données utilisées pendant le projet.
+    │   ├── Gilles         <- Le travail de recherche effectué par Gilles LENY
+    │   ├── Jerry          <- Le travail de recherche effectué par Jerry PETILAIRE
+    │   ├── Samuel         <- Le travail de recherche effectué par Samuel LEE KWET SUN
+    │   └── Mathis GENTHON <- Le travail de recherche effectué par Mathis GENTHON, convention 'OPA#X' pour l'ordre de recherche
     │
-    ├── notebooks          <- Jupyter notebooks. Naming convention is a number (for ordering),
-    │                         the creator's name, and a short `-` delimited description, e.g.
-    │                         `1.0-alban-data-exploration`.
+    ├── models             <- Les modèles finaux entraînés
     │
-    ├── references         <- Data dictionaries, manuals, links, and all other explanatory materials.
+    ├── reports            <- Les rapports produits pour la présentation du projet
+    │   └── figures        <- Les graphiques générés lors de la phase d'exploration des données
     │
-    ├── reports            <- The reports that you'll make during this project as PDF
-    │   └── figures        <- Generated graphics and figures to be used in reporting
-    │
-    ├── requirements.txt   <- The requirements file for reproducing the analysis environment, e.g.
-    │                         generated with `pip freeze > requirements.txt`
-    │
-    ├── src                <- Source code for use in this project.
-    │   ├── __init__.py    <- Makes src a Python module
+    ├── agent              <- Le code source de l'agent analyste 
+    │   ├── app.py         <- Le fichier streamlit utilisé pour lancer l'agent via 'streamlit run agent/app.py'
+    │   ├── agent.py       <- La logique agentique dévéloppée dans le framework LangGraph
+    │   ├── tools.py       <- La fichier référençant les outils disponibles pour l'agent 
     │   │
-    │   ├── features       <- Scripts to turn raw data into features for modeling
-    │   │   └── build_features.py
-    │   │
-    │   ├── models         <- Scripts to train models and then use trained models to make
-    │   │   │                 predictions
-    │   │   ├── predict_model.py
-    │   │   └── train_model.py
-    │   │
-    │   ├── visualization  <- Scripts to create exploratory and results oriented visualizations
-    │   │   └── visualize.py
-
+    │   ├── src            <- Le dossier contenant les scripts des outils
+    │   └── assets         <- Le dossier contenant les assets nécessaires à l'UI de l'application Streamlit
+    
 --------
 
-<p><small>Project based on the <a target="_blank" href="https://drivendata.github.io/cookiecutter-data-science/">cookiecutter data science project template</a>. #cookiecutterdatascience</small></p>
+Mise en place de l'envrionnement 
+------------
+Installer Miniconda : 
+https://www.anaconda.com/docs/getting-started/miniconda/install
+
+Vérfier l'installation : 
+    conda --version
+
+Pour créer l'environnement de l'agent contenant les dépendances : 
+    conda env create -f environment.yml -n agent
+
+Lancement de l'agent
+------------
+
+Activer l'envrionnement pour la session en cours : 
+    conda activate agent
+
+Lancer l'application Streamlit : 
+    streamlit run agent/app.y
+
+![Workflow de l'agent](agent_worlflow.png)

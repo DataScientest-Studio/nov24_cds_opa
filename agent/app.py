@@ -25,7 +25,7 @@ def get_image_as_base64(path):
         data = f.read()
     return base64.b64encode(data).decode()
 
-STELLA_AVATAR = "assets/avatar_stella.png" # Chemin vers l'avatar de Stella
+STELLA_AVATAR = "agent/assets/avatar_stella.png" # Chemin vers l'avatar de Stella
 
 st.set_page_config(page_title="Assistant financier IA", page_icon="📈", layout="wide")
 st.title("📈 Analyste financier IA")
@@ -51,7 +51,7 @@ for msg in st.session_state.messages:
         with st.chat_message("assistant", avatar=STELLA_AVATAR):
             st.write(msg.content)
 
-            # Logique pour le DataFrame (reste inchangée)
+            # Logique pour le DataFrame 
             if hasattr(msg, 'dataframe_json') and msg.dataframe_json:
                 try:
                     df = pd.read_json(StringIO(msg.dataframe_json), orient='split')
@@ -59,7 +59,7 @@ for msg in st.session_state.messages:
                 except Exception as e:
                     st.error(f"Impossible d'afficher le DataFrame : {e}")
 
-            # --- LOGIQUE DE VISUALISATION UNIQUE ET MISE À JOUR ---
+            # --- Logique pour les graphiques Plotly ---
             if hasattr(msg, 'plotly_json') and msg.plotly_json:
                 try:
                     fig = go.Figure(pio.from_json(msg.plotly_json))
