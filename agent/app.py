@@ -30,6 +30,15 @@ STELLA_AVATAR = "assets/avatar_stella.png" # Chemin vers l'avatar de Stella
 st.set_page_config(page_title="Assistant financier IA", page_icon="📈", layout="wide")
 st.title("📈 Analyste financier IA")
 
+st.markdown("""
+    <style>
+        /* Cible les éléments de message de chat dans Streamlit */
+        .stChatMessage .st-emotion-cache-1w7qfeb {
+            font-size: 20px; /* Modifie cette valeur pour changer la taille de la police */
+        }
+    </style>
+""", unsafe_allow_html=True)
+
 # --- Initialisation du session_state pour les messages et d'un ID de session unique ---
 if "messages" not in st.session_state:
     st.session_state.messages = [AIMessage(content="Hello!  Je suis Stella. Je peux t'aider à analyser le potentiel d'une action. Que souhaites-tu faire ?")]
