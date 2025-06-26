@@ -19,6 +19,7 @@ from langgraph.checkpoint.memory import MemorySaver
 # --- Import des tools ---
 from tools import (
     available_tools,
+    _search_ticker_logic,
     _fetch_data_logic, 
     _preprocess_data_logic, 
     _predict_performance_logic, 
@@ -56,12 +57,26 @@ class AgentState(TypedDict):
 
 system_prompt = """Ton nom est Stella. Tu es une assistante experte financière. Ton but principal est d'aider les utilisateurs en analysant des actions.
 
-**Séquence d'analyse complète :**
+**Liste des outils disponibles**
+1. `search_ticker`: Recherche le ticker boursier d'une entreprise à partir de son nom.
+2. `fetch_data`: Récupère les données financières fondamentales pour un ticker boursier donné.
+3. `preprocess_data`: Prépare les données financières récupérées pour la prédiction.
+4. `predict_performance`: Prédit la performance d'une action en se basant sur les données prétraitées.
+5. `display_raw_data`: Affiche le tableau de données financières brutes qui ont été initialement récupérées.
+6. `display_processed_data`: Affiche le tableau de données financières traitées et nettoyées, prêtes pour l'analyse.
+7. `create_dynamic_chart`: Crée un graphique interactif basé sur les données financières prétraitées.
+
+**Séquence d'analyse complète**
 Quand un utilisateur te demande une analyse complète, tu DOIS suivre cette séquence d'outils :
-1. `fetch_data` avec le ticker demandé.
+1. `search_ticker` si le nom de l'entreprise est donné plutôt que le ticker.
+2. `fetch_data` avec le ticker demandé.
 2. `preprocess_data` pour nettoyer les données.
 3. `predict_performance` pour obtenir un verdict.
 Ta tâche est considérée comme terminée après l'appel à `predict_performance`. La réponse finale avec le graphique sera générée automatiquement.
+
+**IDENTIFICATION DU TICKER** 
+Si l'utilisateur donne un nom de société (comme 'Apple' ou 'Microsoft') au lieu d'un ticker (comme 'AAPL' ou 'MSFT'), 
+ta toute première action DOIT être d'utiliser l'outil `search_ticker` pour trouver le ticker correct.
 
 **Analyse et Visualisation Dynamique :**
 Quand un utilisateur te demande de "montrer", "visualiser", ou "comparer" des données spécifiques (par exemple, "montre-moi l'évolution du ROE"), tu DOIS utiliser l'outil `create_dynamic_chart`.
@@ -139,8 +154,13 @@ def execute_tool_node(state: AgentState):
         print(f"Le LLM a décidé d'appeler le tool : {tool_name} - avec les arguments : {tool_args}")
 
         try:
+            if tool_name == "search_ticker":
+                ticker = _search_ticker_logic(company_name=tool_args.get("company_name"))
+                # On met à jour l'état de l'agent avec le ticker trouvé
+                current_state_updates["ticker"] = ticker
+                tool_outputs.append(ToolMessage(tool_call_id=tool_id, content=f"[Ticker '{ticker}' trouvé avec succès. Je vais maintenant récupérer les données.]"))
 
-            if tool_name == "fetch_data":
+            elif tool_name == "fetch_data":
                 try:
                     output_df = _fetch_data_logic(ticker=tool_args.get("ticker"))
                     current_state_updates["fetched_df_json"] = output_df.to_json(orient='split')
@@ -342,7 +362,6 @@ def router(state: AgentState) -> str:
         if not ai_message_for_tool: return END
         tool_name = ai_message_for_tool.tool_calls[-1]['name']
         
-        # --- LOGIQUE DE ROUTAGE CORRIGÉE ET EXPLICITE ---
         if tool_name == 'predict_performance':
             print(f"Routeur -> Décision: Outil final '{tool_name}' exécuté, passage à la réponse finale.")
             return "generate_final_response"

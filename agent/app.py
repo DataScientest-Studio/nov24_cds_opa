@@ -85,9 +85,12 @@ if prompt := st.chat_input("Qu'est ce que je peux faire pour toi aujourd'hui ? �
                 last_message = event["messages"][-1]
                 if isinstance(last_message, AIMessage) and last_message.tool_calls:
                     tool_name = last_message.tool_calls[0]['name']
-                    # Logique pour afficher ce que l'agent est en train de faire
+                    tool_args = last_message.tool_calls[0]['args']
                     ticker = last_message.tool_calls[0]['args'].get('ticker', '')
-                    if tool_name == 'fetch_data':
+                    company_name = tool_args.get('company_name', 'l\'entreprise demandée')
+                    if tool_name == 'search_ticker':
+                        thinking_placeholder.write(f"🔍 Recherche du ticker pour **{company_name}**...")
+                    elif tool_name == 'fetch_data':
                         thinking_placeholder.write(f"🔍 Recherche des données pour **{ticker}**...")
                     elif tool_name == 'preprocess_data':
                         thinking_placeholder.write("⚙️ Préparation des données pour l'analyse...")

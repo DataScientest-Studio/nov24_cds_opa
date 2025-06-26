@@ -7,11 +7,25 @@ from langchain_core.tools import tool
 from io import StringIO
 
 # --- Import des logiques de src  ---
+from src.search_ticker import search_ticker as _search_ticker_logic
 from src.fetch_data import fetch_fundamental_data as _fetch_data_logic
 from src.preprocess import preprocess_financial_data as _preprocess_data_logic
 from src.predict import predict_outperformance as _predict_performance_logic
 
 # --- Définition des outils ---
+@tool
+def search_ticker(company_name: str) -> str:
+    """
+    Utilise cet outil en PREMIER si l'utilisateur fournit un nom de société (comme 'Apple', 'Microsoft', 'Airbus') 
+    au lieu d'un ticker (comme 'AAPL', 'MSFT', 'AIR.PA').
+    Cet outil trouve le ticker boursier le plus probable pour un nom d'entreprise.
+    
+    Args:
+        company_name (str): Le nom de l'entreprise à rechercher.
+    """
+    # La logique réelle est appelée depuis execute_tool_node, ceci est une coquille pour le LLM.
+    return "[Le ticker est prêt à être recherché par le système.]"
+
 
 @tool
 def fetch_data(ticker: str) -> str:
@@ -105,6 +119,7 @@ def create_dynamic_chart(
 
 # --- La liste complète des outils disponibles pour l'agent ---
 available_tools = [
+    search_ticker,
     fetch_data,
     preprocess_data,
     predict_performance,
