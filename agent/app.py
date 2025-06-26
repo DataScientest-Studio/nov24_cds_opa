@@ -6,6 +6,9 @@ import base64
 import pandas as pd
 import plotly.io as pio
 import plotly.graph_objects as go
+from io import StringIO
+
+
 # --- Import de l'agent LangGraph ---
 from agent import app
 from langchain_core.messages import HumanMessage, AIMessage, ToolMessage
@@ -42,7 +45,7 @@ for msg in st.session_state.messages:
             # Logique pour le DataFrame (reste inchangée)
             if hasattr(msg, 'dataframe_json') and msg.dataframe_json:
                 try:
-                    df = pd.read_json(msg.dataframe_json, orient='split')
+                    df = pd.read_json(StringIO(msg.dataframe_json), orient='split')
                     st.dataframe(df) 
                 except Exception as e:
                     st.error(f"Impossible d'afficher le DataFrame : {e}")
@@ -83,7 +86,7 @@ if prompt := st.chat_input("Qu'est ce que je peux faire pour toi aujourd'hui ? �
                 if isinstance(last_message, AIMessage) and last_message.tool_calls:
                     tool_name = last_message.tool_calls[0]['name']
                     # Logique pour afficher ce que l'agent est en train de faire
-                    ticker = final_message.tool_calls[0]['args'].get('ticker', '')
+                    ticker = last_message.tool_calls[0]['args'].get('ticker', '')
                     if tool_name == 'fetch_data':
                         thinking_placeholder.write(f"🔍 Recherche des données pour **{ticker}**...")
                     elif tool_name == 'preprocess_data':

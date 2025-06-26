@@ -1,29 +1,36 @@
 # src/preprocess.py
 
-#### Fonction dummy pour les premiers tests #### 
 import pandas as pd
 
 def preprocess_financial_data(df: pd.DataFrame) -> pd.DataFrame:
     """
-    Préprocesse des données financières brutes en features conformes pour le modèle de prédiction.
+    Préprocesse les données financières brutes.
+    Le DataFrame retourné contient les features pour le modèle ET des colonnes supplémentaires
+    comme 'calendarYear' pour la visualisation.
     """
-    df['index'] = df.symbol + '_' + df.calendarYear.astype('string')
-    df = df.set_index('index')
-    df['marginProfit'] = df['netIncomePerShare'] / df['revenuePerShare']
-    df = df.sort_values(by='calendarYear')
-    df['revenuePerShare_YoY_Growth'] = ((df['revenuePerShare'] / df['revenuePerShare'].shift(1)) - 1) * 100
-    df = df[['marketCap', 'marginProfit', 'roe', 'roic', 'revenuePerShare', 'debtToEquity', 'revenuePerShare_YoY_Growth', 'earningsYield']]
-    processed_df = df.dropna()
+    df_processed = df.copy()
+    
+    # On garde une trace de l'année pour la visualisation
+    df_processed['calendarYear'] = df_processed['calendarYear'].astype(str)
 
-    print(f"Preprocessed data:\n{processed_df.head()}")
-    return processed_df
+    # On crée l'index pour la cohérence
+    df_processed = df_processed.set_index(df_processed['symbol'] + '_' + df_processed['calendarYear'])
 
-if __name__ == '__main__':
-    # Example usage for testing
-    from src.fetch_data import fetch_fundamental_data
-    try:
-        aapl_raw = fetch_fundamental_data("AAPL")
-        aapl_processed = preprocess_financial_data(aapl_raw)
-        print("\nAAPL Data Preprocessed Successfully!")
-    except Exception as e:
-        print(f"Error preprocessing AAPL data: {e}")
+    # Calculs
+    df_processed['marginProfit'] = df_processed['netIncomePerShare'] / df_processed['revenuePerShare']
+    df_processed = df_processed.sort_values(by='calendarYear')
+    df_processed['revenuePerShare_YoY_Growth'] = ((df_processed['revenuePerShare'] / df_processed['revenuePerShare'].shift(1)) - 1) * 100
+    
+    # Sélection des colonnes finales "riches"
+    final_cols = [
+        'calendarYear', 'marketCap', 'marginProfit', 'roe', 'roic', 'revenuePerShare', 
+        'debtToEquity', 'revenuePerShare_YoY_Growth', 'earningsYield'
+    ]
+    
+    # On s'assure de ne pas sélectionner des colonnes qui n'existeraient pas dans les données brutes
+    available_cols = [col for col in final_cols if col in df_processed.columns]
+    
+    df_processed = df_processed[available_cols].dropna()
+
+    print(f"Preprocessed data (rich version for tools):\n{df_processed.head()}")
+    return df_processed

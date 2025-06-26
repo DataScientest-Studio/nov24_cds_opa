@@ -4,6 +4,7 @@ import pandas as pd
 import plotly.express as px
 import plotly.io as pio
 from langchain_core.tools import tool
+from io import StringIO
 
 # --- Import des logiques de src  ---
 from src.fetch_data import fetch_fundamental_data as _fetch_data_logic
@@ -38,33 +39,68 @@ def display_processed_data() -> str:
     return "[Le tableau de données traitées est prêt à être affiché.]"
 
 
+def _create_dynamic_chart_logic(
+    data_json: str,
+    chart_type: str,
+    x_column: str,
+    y_column: str,
+    title: str,
+    color_column: str = None
+) -> str:
+    """Contient la logique de création de graphique, sans être un outil LangChain."""
+    try:
+        df = pd.read_json(StringIO(data_json), orient='split')
+
+        if 'calendarYear' in df.columns:
+            df['calendarYear'] = df['calendarYear'].astype(str)
+
+        if chart_type == 'line':
+            fig = px.line(df, x=x_column, y=y_column, title=title, color=color_column, markers=True)
+        elif chart_type == 'bar':
+            fig = px.bar(df, x=x_column, y=y_column, title=title, color=color_column)
+        elif chart_type == 'scatter':
+            fig = px.scatter(df, x=x_column, y=y_column, title=title, color=color_column)
+        elif chart_type == 'pie':
+            fig = px.pie(df, names=x_column, values=y_column, title=title)
+        else:
+            return f"Erreur : Le type de graphique '{chart_type}' n'est pas supporté."
+
+        fig.update_layout(template="plotly_white", font=dict(family="Arial, sans-serif"))
+        return pio.to_json(fig)
+
+    except Exception as e:
+        # Il est utile de savoir quelle colonne a posé problème
+        if isinstance(e, KeyError):
+            return f"Erreur lors de la création du graphique : La colonne '{e.args[0]}' n'a pas été trouvée dans les données."
+        return f"Erreur lors de la création du graphique : {str(e)}"
+
+# 2. L'outil LangChain qui est "vu" par le LLM
 @tool
 def create_dynamic_chart(
     chart_type: str,
     x_column: str,
     y_column: str,
     title: str,
-    color_column: str = None,
+    color_column: str = None
 ) -> str:
     """
     Crée un graphique dynamique et interactif avec Plotly. Les données sont fournies automatiquement.
 
-    IMPORTANT : Le nom de la colonne que tu fournis pour `y_column` DOIT correspondre EXACTEMENT
-    à l'un des noms de la liste de colonnes disponibles qui te sera fournie dans le contexte de la conversation.
-    Ne traduis pas et n'invente pas de noms de colonnes.
+    Tu DOIS choisir le meilleur type de graphique en fonction de la demande de l'utilisateur et de la nature des données.
+    - Utilise 'line' pour les données chronologiques (ex: évolution d'une métrique sur plusieurs années).
+    - Utilise 'bar' pour comparer des catégories ou des valeurs à un instant T.
 
-    Types de graphiques possibles :
-    - 'line' pour les données chronologiques (ex: évolution d'une métrique sur plusieurs années).
-    - 'bar' pour comparer des catégories ou des valeurs à un instant T.
-    
     Args:
-        chart_type (str): Le type de graphique à créer.
-        x_column (str): Le nom de la colonne pour l'axe des X (généralement 'year' pour les graphiques en ligne).
-        y_column (str): Le nom EXACT de la colonne pour l'axe des Y, choisi depuis la liste fournie.
+        chart_type (str): Le type de graphique à créer. Types supportés : 'line', 'bar', 'scatter', 'pie'.
+        x_column (str): Le nom de la colonne à utiliser pour l'axe des X.
+        y_column (str): Le nom de la colonne à utiliser pour l'axe des Y.
         title (str): Un titre descriptif pour le graphique.
-        color_column (str, optional): La colonne pour colorer les éléments du graphique.
+        color_column (str, optional): La colonne à utiliser pour colorer les éléments du graphique.
     """
-    pass
+    # Cette fonction est une "coquille vide" pour LangChain. 
+    # La logique réelle est appelée depuis execute_tool_node dans agent.py.
+    return "[L'outil de création de graphique est prêt à être exécuté par le système.]"
+
 
 
 # --- La liste complète des outils disponibles pour l'agent ---
@@ -72,7 +108,7 @@ available_tools = [
     fetch_data,
     preprocess_data,
     predict_performance,
-    create_dynamic_chart,   # L'unique outil de visualisation
     display_raw_data,
     display_processed_data,
+    create_dynamic_chart 
 ]

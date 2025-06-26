@@ -24,10 +24,12 @@ def predict_outperformance(processed_data: pd.DataFrame) -> str:
     model = joblib.load(MODEL_PATH)
     
     print("Préparation des données pour la prédiction...")
-    expected_cols = ['marketCap', 'marginProfit', 'roe', 'roic', 'revenuePerShare', 'debtToEquity', 'revenuePerShare_YoY_Growth', 'earningsYield']
+
+    expected_cols = ['marketCap', 'marginProfit', 'roe', 'roic', 'revenuePerShare', 'debtToEquity', 'revenuePerShare_YoY_Growth', 'earningsYield', 'calendarYear']
     
     # S'assure que les colonnes sont dans le bon ordre et que les manquantes sont remplies (avec 0 par ex.)
     data_for_prediction = processed_data.reindex(columns=expected_cols, fill_value=0)
+    data_for_prediction = data_for_prediction.drop(columns=['calendarYear'], errors='ignore')  # On ne prédit pas sur l'année
     
     if data_for_prediction.empty or data_for_prediction.isnull().values.any():
         raise ValueError("Les données fournies sont vides ou contiennent des valeurs nulles après le reformatage.")

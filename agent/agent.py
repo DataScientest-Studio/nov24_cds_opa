@@ -6,6 +6,8 @@ import pandas as pd
 import plotly.express as px
 import plotly.io as pio
 import uuid
+from io import StringIO
+from src.fetch_data import APILimitError 
 
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import HumanMessage, AIMessage, BaseMessage, ToolMessage, SystemMessage
@@ -20,12 +22,12 @@ from tools import (
     _fetch_data_logic, 
     _preprocess_data_logic, 
     _predict_performance_logic, 
-    create_dynamic_chart as create_dynamic_chart_tool
+    _create_dynamic_chart_logic
 )
 
 # --- Initalisation du LLM ---
 OPENROUTER_API_BASE = "https://openrouter.ai/api/v1"
-OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
+OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY") 
 OPENROUTER_MODEL = "deepseek/deepseek-chat-v3-0324:free"
 
 if not OPENROUTER_API_KEY:
@@ -61,8 +63,17 @@ Quand un utilisateur te demande une analyse complète, tu DOIS suivre cette séq
 3. `predict_performance` pour obtenir un verdict.
 Ta tâche est considérée comme terminée après l'appel à `predict_performance`. La réponse finale avec le graphique sera générée automatiquement.
 
-**Demandes de graphiques spécifiques :**
-Si, après une première analyse, l'utilisateur demande une visualisation spécifique (ex: "montre-moi l'évolution du ROE"), tu dois utiliser l'outil `create_dynamic_chart`. Choisis le meilleur type de graphique (`line` pour une évolution, `bar` pour une comparaison, etc.) et les bonnes colonnes.
+**Analyse et Visualisation Dynamique :**
+Quand un utilisateur te demande de "montrer", "visualiser", ou "comparer" des données spécifiques (par exemple, "montre-moi l'évolution du ROE"), tu DOIS utiliser l'outil `create_dynamic_chart`.
+
+Pour cela, tu dois impérativement connaître la structure des données que tu manipules. Après l'étape `preprocess_data`, les données contiennent les colonnes suivantes :
+`calendarYear`, `marketCap`, `marginProfit`, `roe`, `roic`, `revenuePerShare`, `debtToEquity`, `revenuePerShare_YoY_Growth`, `earningsYield`.
+
+**Instructions pour `create_dynamic_chart` :**
+1.  **Pour l'axe du temps, tu dois IMPÉRATIVEMENT utiliser la colonne `calendarYear` pour l'argument `x_column`. Ne suppose jamais l'existence d'une colonne 'year' ou 'date'.**
+2.  Pour l'argument `y_column`, utilise le nom exact de la métrique demandée par l'utilisateur (par exemple, `roe`, `marginProfit`).
+3.  Choisis le `chart_type` le plus pertinent : `line` pour une évolution dans le temps, `bar` pour une comparaison.
+4.  Si les données ne sont pas encore disponibles, appelle d'abord `fetch_data`.
 
 **Logique de Prédiction :**
 - Si `predict_performance` renvoie "Risque Élevé Détecté", présente cela comme un avertissement clair.
@@ -85,7 +96,7 @@ def agent_node(state: AgentState):
     if state.get("processed_df_json"):
         try:
             # Charge les colonnes disponibles à partir des données
-            df = pd.read_json(state["processed_df_json"], orient='split')
+            df = pd.read_json(StringIO(state["processed_df_json"]), orient='split')
             available_columns = df.columns.tolist()
             
             # Crée un message de contexte à injecter
@@ -119,115 +130,76 @@ def execute_tool_node(state: AgentState):
 
     tool_outputs = []
     current_state_updates = {}
+    
+    # On gère le cas où plusieurs outils sont appelés, bien que ce soit rare ici.
     for tool_call in action_message.tool_calls:
         tool_name = tool_call['name']
         tool_args = tool_call['args']
         tool_id = tool_call['id']
         print(f"Le LLM a décidé d'appeler le tool : {tool_name} - avec les arguments : {tool_args}")
+
         try:
+
             if tool_name == "fetch_data":
                 try:
-                  output_df = _fetch_data_logic(ticker=tool_args.get("ticker"))
-                  current_state_updates["fetched_df_json"] = output_df.to_json(orient='split')
-                  current_state_updates["ticker"] = tool_args.get("ticker")
-                  tool_outputs.append(ToolMessage(tool_call_id=tool_id, content="[Données récupérées avec succès.]"))
-            
+                    output_df = _fetch_data_logic(ticker=tool_args.get("ticker"))
+                    current_state_updates["fetched_df_json"] = output_df.to_json(orient='split')
+                    current_state_updates["ticker"] = tool_args.get("ticker")
+                    tool_outputs.append(ToolMessage(tool_call_id=tool_id, content="[Données récupérées avec succès.]"))
                 except APILimitError as e:
-                    # C'est ici que nous gérons l'erreur de clé API !
-                    print(f"Erreur de clé API détectée : {e}")
-                    user_friendly_error = "Désolé, il semble que j'aie un problème d'accès à mon fournisseur de données financières. C'est probablement dû à une limite d'utilisation. Peux-tu réessayer un peu plus tard ?"
-                    # On informe l'agent de l'échec via un ToolMessage
+                    user_friendly_error = "Désolé, il semble que j'aie un problème d'accès à mon fournisseur de données. Peux-tu réessayer plus tard ?"
                     tool_outputs.append(ToolMessage(tool_call_id=tool_id, content=json.dumps({"error": user_friendly_error})))
-                    # On stocke l'erreur pour arrêter le graph proprement
                     current_state_updates["error"] = user_friendly_error
-            
+
             elif tool_name == "preprocess_data":
-                fetched_df = pd.read_json(state["fetched_df_json"], orient='split')
+                if not state.get("fetched_df_json"):
+                    raise ValueError("Impossible de prétraiter les données car elles n'ont pas encore été récupérées.")
+                fetched_df = pd.read_json(StringIO(state["fetched_df_json"]), orient='split')
                 output = _preprocess_data_logic(df=fetched_df)
                 current_state_updates["processed_df_json"] = output.to_json(orient='split')
                 tool_outputs.append(ToolMessage(tool_call_id=tool_id, content="[Données prétraitées avec succès.]"))
-            
+
             elif tool_name == "predict_performance":
-                processed_df = pd.read_json(state["processed_df_json"], orient='split')
+                if not state.get("processed_df_json"):
+                    raise ValueError("Impossible de faire une prédiction car les données n'ont pas encore été prétraitées.")
+                processed_df = pd.read_json(StringIO(state["processed_df_json"]), orient='split')
                 output = _predict_performance_logic(processed_data=processed_df)
                 current_state_updates["prediction"] = output
                 tool_outputs.append(ToolMessage(tool_call_id=tool_id, content=output))
+
+            elif tool_name == "visualize_data":
+                if not state.get("fetched_df_json") or not state.get("prediction"):
+                     raise ValueError("Données ou prédiction manquantes pour la visualisation.")
+                fetched_df = pd.read_json(StringIO(state["fetched_df_json"]), orient='split')
+                output = _visualize_data_logic(data=fetched_df, prediction=state["prediction"], ticker=state["ticker"])
+                current_state_updates["image_base64"] = output
+                tool_outputs.append(ToolMessage(tool_call_id=tool_id, content="[Image générée avec succès.]"))
             
+            elif tool_name == "create_dynamic_chart":
+                data_json_for_chart = state.get("processed_df_json") or state.get("fetched_df_json")
+                if not data_json_for_chart:
+                    raise ValueError("Aucune donnée disponible pour créer un graphique. Appelle 'fetch_data' d'abord.")
+                
+                tool_args['data_json'] = data_json_for_chart
+                chart_json = _create_dynamic_chart_logic(**tool_args)
+
+                # On ajoute une vérification pour être sûr que la sortie est une chaîne de caractères
+                if not isinstance(chart_json, str):
+                    raise TypeError(f"L'outil a retourné un type inattendu : {type(chart_json)}")
+                
+                if "Erreur" in chart_json:
+                    raise ValueError(chart_json) # Transforme l'erreur de l'outil en exception
+                
+                current_state_updates["plotly_json"] = chart_json
+                tool_outputs.append(ToolMessage(tool_call_id=tool_id, content="[Graphique interactif créé avec succès.]"))
+
             elif tool_name in ["display_raw_data", "display_processed_data"]:
                 if not state.get("fetched_df_json"):
-                     tool_outputs.append(ToolMessage(tool_call_id=tool_id, content="Erreur: Aucune donnée disponible à afficher."))
-                else:
-                    tool_outputs.append(ToolMessage(tool_call_id=tool_id, content="[Préparation de l'affichage des données.]"))
-
-            elif tool_name == "create_dynamic_chart":
-              if not state.get("processed_df_json"):
-                  raise ValueError("Aucune donnée n'est disponible pour créer un graphique.")
-
-              df = pd.read_json(state["processed_df_json"], orient='split')
-              chart_type = tool_args.get('chart_type')
-              title = tool_args.get('title', "Graphique Financier")
-              y_col_requested = tool_args.get('y_column') # Le LLM devrait maintenant donner le nom exact
-
-              # Sécurité : on vérifie quand même que la colonne existe
-              if y_col_requested not in df.columns:
-                  raise ValueError(f"La colonne '{y_col_requested}' n'existe pas. Colonnes valides : {df.columns.tolist()}")
-
-                # --- CAS 1: Le LLM demande un graphique en ligne (évolution temporelle) ---
-              if chart_type == 'line':
-                  print("Logique détectée: Graphique en ligne (line chart)")
-                  # Prépare les données pour une série temporelle
-                  df.reset_index(inplace=True)
-                  df['year'] = df['index'].str.split('_').str[-1]
-                  
-                  x_col_to_use = 'year'
-                  y_col_requested = tool_args.get('y_column')
-
-                  if y_col_requested not in df.columns:
-                      raise ValueError(f"La colonne '{y_col_requested}' pour l'axe Y n'existe pas.")
-
-                  fig = px.line(df, x=x_col_to_use, y=y_col_requested, title=title, markers=True)
-
-              # --- CAS 2: Le LLM demande un graphique en barres (comparaison de métriques) ---
-              elif chart_type == 'bar':
-                  print("Logique détectée: Graphique en barres (bar chart)")
-
-                  metrics_to_plot = ['roe', 'debttoequity', 'earningsyield', 'marginprofit']
-                  
-                  # On s'assure que les colonnes existent avant de continuer
-                  valid_metrics = [m for m in metrics_to_plot if m in df.columns]
-                  if not valid_metrics:
-                      raise ValueError("Aucune des métriques clés à visualiser n'a été trouvée dans les données.")
-
-                  df_for_bar = df[valid_metrics].iloc[-1].reset_index()
-                  df_for_bar.columns = ['Indicateur', 'Valeur']
-                  
-                  fig = px.bar(df_for_bar, x='Indicateur', y='Valeur', title=title, color='indicateur')
-              
-              # --- CAS 3: Autres types de graphiques (plus simples) ---
-              else:
-                  print(f"Logique détectée: Graphique de type '{chart_type}'")
-                  x_col_requested = tool_args.get('x_column')
-                  y_col_requested = tool_args.get('y_column')
-
-                  if x_col_requested not in df.columns or y_col_requested not in df.columns:
-                      raise ValueError(f"Les colonnes '{x_col_requested}' ou '{y_col_requested}' n'existent pas.")
-                  
-                  if chart_type == 'scatter':
-                      fig = px.scatter(df, x=x_col_requested, y=y_col_requested, title=title)
-                  # Ajoutez d'autres elif pour 'pie', etc. si nécessaire
-                  else:
-                      raise ValueError(f"Le type de graphique '{chart_type}' est demandé mais sa logique n'est pas implémentée ici.")
-
-              # --- Finalisation et envoi ---
-              if fig:
-                  fig.update_layout(template="plotly_white", font=dict(family="Arial, sans-serif"))
-                  chart_json = pio.to_json(fig)
-                  current_state_updates["plotly_json"] = chart_json
-                  tool_outputs.append(ToolMessage(tool_call_id=tool_id, content="[Graphique interactif créé avec succès.]"))
-              else:
-                  raise ValueError("La figure du graphique n'a pas pu être créée.")
-
+                     raise ValueError("Aucune donnée disponible à afficher.")
+                tool_outputs.append(ToolMessage(tool_call_id=tool_id, content="[Préparation de l'affichage des données.]"))
+            
         except Exception as e:
+            # Bloc de capture générique pour toutes les autres erreurs
             error_msg = f"Erreur lors de l'exécution de l'outil '{tool_name}': {repr(e)}"
             tool_outputs.append(ToolMessage(tool_call_id=tool_id, content=json.dumps({"error": error_msg})))
             current_state_updates["error"] = error_msg
@@ -256,7 +228,7 @@ def generate_final_response_node(state: AgentState):
     processed_df = None # Initialisation
     if state.get("processed_df_json"):
         try:
-            processed_df = pd.read_json(state["processed_df_json"], orient='split')
+            processed_df = pd.read_json(StringIO(state["processed_df_json"]), orient='split')
             if not processed_df.empty:
                 last_index = processed_df.index[-1]
                 latest_year_str = str(last_index).split('_')[-1]
@@ -342,7 +314,7 @@ def prepare_chart_display_node(state: AgentState):
     # Laisse le LLM générer une courte phrase d'introduction
     response = ("Voici le graphgique demandé : ")
     
-    final_message = AIMessage(content=response.content)
+    final_message = AIMessage(content=response)
     setattr(final_message, 'plotly_json', state["plotly_json"])
     
     return {"messages": [final_message]}
