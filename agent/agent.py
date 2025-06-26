@@ -24,7 +24,8 @@ from tools import (
     _fetch_data_logic, 
     _preprocess_data_logic, 
     _predict_performance_logic, 
-    _create_dynamic_chart_logic
+    _create_dynamic_chart_logic,
+    _fetch_profile_logic
 )
 
 # --- Initalisation du LLM ---
@@ -33,7 +34,7 @@ OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 OPENROUTER_MODEL = "deepseek/deepseek-chat-v3-0324:free"
 
 if not OPENROUTER_API_KEY:
-    raise ValueError("OPENROUTER_API_KEY n'a  pas été enregistrée comme variable d'environnement.")
+    raise ValueError("OPENROUTER_API_KEY n'a pas été enregistrée comme variable d'environnement.")
 
 llm = ChatOpenAI(
     model=OPENROUTER_MODEL,
@@ -85,16 +86,20 @@ Si l'utilisateur donne un nom de société (comme 'Apple' ou 'Microsoft') au lie
 ta toute première action DOIT être d'utiliser l'outil `search_ticker` pour trouver le ticker correct.
 
 **Analyse et Visualisation Dynamique :**
-Quand un utilisateur te demande de "montrer", "visualiser", ou "comparer" des données spécifiques (par exemple, "montre-moi l'évolution du ROE"), tu DOIS utiliser l'outil `create_dynamic_chart`.
+Quand un utilisateur te demande de "montrer", "visualiser", ou "comparer" des données spécifiques (par exemple, "montre-moi l'évolution du ROE"), tu DOIS suivre cette séquence :
 
-Pour cela, tu dois impérativement connaître la structure des données que tu manipules. Après l'étape `preprocess_data`, les données contiennent les colonnes suivantes :
-`calendarYear`, `marketCap`, `marginProfit`, `roe`, `roic`, `revenuePerShare`, `debtToEquity`, `revenuePerShare_YoY_Growth`, `earningsYield`.
+1.  Si les données ne sont pas encore disponibles, appelle `fetch_data`.
+2.  **Tu DOIS ensuite TOUJOURS appeler `preprocess_data` pour préparer les données pour la visualisation.** C'est une étape non négociable.
+3.  Enfin, appelle `create_dynamic_chart` en utilisant les colonnes des données traitées.
 
 **Instructions pour `create_dynamic_chart` :**
-1.  **Pour l'axe du temps, tu dois IMPÉRATIVEMENT utiliser la colonne `calendarYear` pour l'argument `x_column`. Ne suppose jamais l'existence d'une colonne 'year' ou 'date'.**
-2.  Pour l'argument `y_column`, utilise le nom exact de la métrique demandée par l'utilisateur (par exemple, `roe`, `marginProfit`).
-3.  Choisis le `chart_type` le plus pertinent : `line` pour une évolution dans le temps, `bar` pour une comparaison.
-4.  Si les données ne sont pas encore disponibles, appelle d'abord `fetch_data`.
+L'outil `create_dynamic_chart` ne fonctionnera QUE si tu respectes les règles suivantes. Toute déviation entraînera une erreur.
+
+1.  **La seule colonne valide pour l'axe du temps (x_column) est `calendarYear`.** L'utilisation de 'date', 'Date', 'year' ou toute autre variation est INTERDITE et provoquera un crash.
+2.  **Les noms des colonnes pour y_column doivent être EXACTEMENT comme dans cette liste :** `marketCap`, `marginProfit`, `roe`, `roic`, `revenuePerShare`, `debtToEquity`, `revenuePerShare_YoY_Growth`, `earningsYield`. N'utilise JAMAIS de majuscules ou d'espaces (ex: utilise `marketCap`, pas `Market Cap`).
+3.  Pour l'argument `y_column`, utilise le nom exact de la métrique demandée par l'utilisateur (par exemple, `roe`, `marginProfit`).
+4.  Choisis le `chart_type` le plus pertinent : `line` pour une évolution dans le temps, `bar` pour une comparaison.
+5.  Si les données ne sont pas encore disponibles, appelle d'abord `fetch_data`.
 
 **Logique de Prédiction :**
 - Si `predict_performance` renvoie "Risque Élevé Détecté", présente cela comme un avertissement clair.
@@ -104,19 +109,56 @@ Pour cela, tu dois impérativement connaître la structure des données que tu m
 Si l'utilisateur demande "les nouvelles", "les actualités" ou "ce qui se passe" pour une entreprise, utilise l'outil `get_stock_news`. 
 Tu peux aussi proposer de le faire après une analyse complète.
 
+**Profil de l'entreprise :**
+Si l'utilisateur demande "le profil", "des informations", "une présentation" ou autre demande similaire pour une entreprise, utilise l'outil `get_company_profile`. 
+Tu peux aussi proposer de le faire après une analyse complète.
+
 Tu dois toujours répondre en français et tutoyer ton interlocuteur.
 """
 # --- Définition des noeuds du Graph ---
 
 # Noeud 1 : agent_node, point d'entrée
-# agent.py
-
 def agent_node(state: AgentState):
-    """Le 'cerveau' de l'agent. Décide le prochain outil à appeler."""
+    """Le 'cerveau' de l'agent. Décide du prochain outil à appeler."""
     print("\n--- AGENT: Décision de la prochaine étape... ---")
+
+    # On prépare une liste de messages pour cet appel spécifique
+    # On commence par le prompt système pour donner le rôle
+    current_messages = [SystemMessage(content=system_prompt)]
     
-    response = llm.bind_tools(available_tools).invoke(state['messages'])
+    # --- INJECTION DE CONTEXTE DYNAMIQUE ---
+    data_to_inspect_json = state.get("processed_df_json") or state.get("fetched_df_json")
     
+    if data_to_inspect_json:
+        try:
+            df = pd.read_json(StringIO(data_to_inspect_json), orient='split')
+            available_columns = df.columns.tolist()
+            
+            # On crée un message système temporaire avec les colonnes disponibles
+            context_message = SystemMessage(
+                content=(
+                    f"\n\n--- CONTEXTE ACTUEL DES DONNÉES ---\n"
+                    f"Des données sont disponibles.\n"
+                    f"Si tu utilises `create_dynamic_chart`, tu DOIS choisir les colonnes EXACTEMENT dans cette liste :\n"
+                    f"{available_columns}\n"
+                    f"---------------------------------\n"
+                )
+            )
+            # On ajoute le contexte à notre liste de messages
+            current_messages.append(context_message)
+
+        except Exception as e:
+            print(f"Avertissement: Impossible d'injecter le contexte des colonnes. Erreur: {e}")
+
+    # On ajoute l'historique de la conversation depuis l'état
+    current_messages.extend(state['messages'])
+
+    # On invoque le LLM avec la liste de messages complète
+    # Cette liste est locale et ne modifie pas l'état directement
+    response = llm.bind_tools(available_tools).invoke(current_messages)
+    
+    # On retourne UNIQUEMENT la nouvelle réponse de l'IA. 
+    # add_messages s'occupera de l'ajouter correctement à l'état, de manière sérialisable.
     return {"messages": [response]}
 
 # Noeud 2 : execute_tool_node, exécute les outils en se basant sur la décision de l'agent_node (Noeud 1).
@@ -198,25 +240,36 @@ def execute_tool_node(state: AgentState):
             elif tool_name == "create_dynamic_chart":
                 data_json_for_chart = state.get("processed_df_json") or state.get("fetched_df_json")
                 if not data_json_for_chart:
-                    raise ValueError("Aucune donnée disponible pour créer un graphique. Appelle 'fetch_data' d'abord.")
+                    raise ValueError("Aucune donnée disponible pour créer un graphique.")
                 
-                tool_args['data_json'] = data_json_for_chart
-                chart_json = _create_dynamic_chart_logic(**tool_args)
-
-                # On ajoute une vérification pour être sûr que la sortie est une chaîne de caractères
-                if not isinstance(chart_json, str):
-                    raise TypeError(f"L'outil a retourné un type inattendu : {type(chart_json)}")
+                # On convertit le JSON en DataFrame
+                df_for_chart = pd.read_json(StringIO(data_json_for_chart), orient='split')
+                
+                chart_json = _create_dynamic_chart_logic(
+                    data=df_for_chart,  # <--- Le DataFrame est passé directement
+                    chart_type=tool_args.get('chart_type'),
+                    x_column=tool_args.get('x_column'),
+                    y_column=tool_args.get('y_column'),
+                    title=tool_args.get('title'),
+                    color_column=tool_args.get('color_column')
+                )
+                
                 
                 if "Erreur" in chart_json:
                     raise ValueError(chart_json) # Transforme l'erreur de l'outil en exception
                 
                 current_state_updates["plotly_json"] = chart_json
-                tool_outputs.append(ToolMessage(tool_call_id=tool_id, content="[Graphique interactif créé avec succès.]"))
+                tool_outputs.append(ToolMessage(tool_call_id=tool_id, content="[Graphique interactif créé.]"))
 
             elif tool_name in ["display_raw_data", "display_processed_data"]:
                 if not state.get("fetched_df_json"):
                      raise ValueError("Aucune donnée disponible à afficher.")
                 tool_outputs.append(ToolMessage(tool_call_id=tool_id, content="[Préparation de l'affichage des données.]"))
+
+            elif tool_name == "get_company_profile":
+                ticker = tool_args.get("ticker")
+                profile_json = _fetch_profile_logic(ticker=ticker)
+                tool_outputs.append(ToolMessage(tool_call_id=tool_id, content=profile_json))
             
         except Exception as e:
             # Bloc de capture générique pour toutes les autres erreurs
@@ -228,12 +281,7 @@ def execute_tool_node(state: AgentState):
     current_state_updates["messages"] = tool_outputs
     return current_state_updates
 
-# Noeud 3 : synthesize_final_answer_node, synthétise la réponse finale à partir de l'état.
-# agent.py
-
-# ... (imports, y compris pandas as pd et AIMessage)
-
-# Noeud 3 : synthesize_final_answer_node, synthétise la réponse finale à partir de l'état.
+# Noeud 3 : generate_final_response_node, synthétise la réponse finale à partir de l'état.
 def generate_final_response_node(state: AgentState):
     """
     Génère la réponse textuelle finale ET le graphique Plotly par défaut après une analyse complète.
@@ -319,7 +367,7 @@ def cleanup_state_node(state: AgentState):
     print("\n--- SYSTEM: Nettoyage partiel du state avant la sauvegarde ---")
     return {"plotly_json": ""}
 
-# Noeud 5 : prepare_data_display_node, prépare les données pour l'affichage en DataFrame
+# Noeuds supplémentaires de préparation pour l'affichage des données, graphiques, actualités et profil d'entreprise.
 def prepare_data_display_node(state: AgentState):
     """Prépare un AIMessage avec un DataFrame spécifique attaché."""
     print("\n--- AGENT: Préparation du DataFrame pour l'affichage ---")
@@ -378,10 +426,37 @@ def prepare_news_display_node(state: AgentState):
     
     return {"messages": [final_message]}
 
-# --- Router principal pour diriger le flux du graph ---
+def prepare_profile_display_node(state: AgentState):
+    """Prépare un AIMessage avec le profil de l'entreprise pour l'affichage."""
+    print("\n--- AGENT: Préparation de l'affichage du profil d'entreprise ---")
+    
+    tool_message = next((msg for msg in reversed(state['messages']) if isinstance(msg, ToolMessage)), None)
+    
+    if not tool_message or not tool_message.content:
+        final_message = AIMessage(content="Désolé, je n'ai pas pu récupérer le profil de l'entreprise.")
+        return {"messages": [final_message]}
 
-# agent.py
+    # Le LLM va générer une phrase d'introduction sympa. On lui passe juste le contenu.
+    prompt = f"""
+    Voici les informations de profil pour une entreprise au format JSON :
+    {tool_message.content}
+    
+    Rédige une réponse la plus exhaustive et agréable possible pour présenter ces informations à l'utilisateur.
+    Mets en avant le nom de l'entreprise, son secteur et son CEO, mais n'omet aucune information dans le JSON.
+    Tu n'afficheras pas l'image du logo, l'UI s'en chargera.
+    Présente les informations de manière sobre en listant les points du JSON.
+    Termine en donnant le lien vers leur site web.
+    """
+    response = llm.invoke(prompt)
+    
+    final_message = AIMessage(content=response.content)
+    
+    # On attache le JSON pour que le front-end puisse afficher l'image du logo !
+    setattr(final_message, 'profile_json', tool_message.content)
+    
+    return {"messages": [final_message]}
 
+# --- Router pour diriger le flux du graph ---
 def router(state: AgentState) -> str:
     """Le routeur principal du graphe, version finale robuste."""
     print("\n--- ROUTEUR: Évaluation de l'état pour choisir la prochaine étape ---")
@@ -430,6 +505,8 @@ def router(state: AgentState) -> str:
         return "prepare_chart_display"
     elif tool_name == 'get_stock_news':
         return "prepare_news_display"
+    elif tool_name == 'get_company_profile': 
+        return "prepare_profile_display"
     else: # Pour search_ticker, fetch_data, preprocess_data
         return "agent"
     
@@ -444,6 +521,7 @@ workflow.add_node("cleanup_state", cleanup_state_node)
 workflow.add_node("prepare_data_display", prepare_data_display_node) 
 workflow.add_node("prepare_chart_display", prepare_chart_display_node)
 workflow.add_node("prepare_news_display", prepare_news_display_node)
+workflow.add_node("prepare_profile_display", prepare_profile_display_node)
 
 workflow.set_entry_point("agent")
 
@@ -457,11 +535,13 @@ workflow.add_conditional_edges(
         "prepare_data_display": "prepare_data_display", 
         "prepare_chart_display": "prepare_chart_display",
         "prepare_news_display": "prepare_news_display", 
+        "prepare_profile_display": "prepare_profile_display",
         "__end__": END
     }
 )
 
 workflow.add_edge("generate_final_response", "cleanup_state")
+workflow.add_edge("prepare_profile_display", END)
 workflow.add_edge("prepare_data_display", END) 
 workflow.add_edge("prepare_chart_display", END)
 workflow.add_edge("prepare_news_display", END)

@@ -12,6 +12,7 @@ from src.fetch_data import fetch_fundamental_data as _fetch_data_logic
 from src.preprocess import preprocess_financial_data as _preprocess_data_logic
 from src.predict import predict_outperformance as _predict_performance_logic
 from src.fetch_news import fetch_recent_news as _fetch_recent_news_logic
+from src.fetch_profile import fetch_company_profile as _fetch_profile_logic
 
 # --- Définition des outils ---
 @tool
@@ -55,7 +56,7 @@ def display_processed_data() -> str:
 
 
 def _create_dynamic_chart_logic(
-    data_json: str,
+    data: pd.DataFrame,
     chart_type: str,
     x_column: str,
     y_column: str,
@@ -64,8 +65,7 @@ def _create_dynamic_chart_logic(
 ) -> str:
     """Contient la logique de création de graphique, sans être un outil LangChain."""
     try:
-        df = pd.read_json(StringIO(data_json), orient='split')
-
+        df = data.copy() # On travaille sur une copie
         if 'calendarYear' in df.columns:
             df['calendarYear'] = df['calendarYear'].astype(str)
 
@@ -86,10 +86,10 @@ def _create_dynamic_chart_logic(
     except Exception as e:
         # Il est utile de savoir quelle colonne a posé problème
         if isinstance(e, KeyError):
-            return f"Erreur lors de la création du graphique : La colonne '{e.args[0]}' n'a pas été trouvée dans les données."
+            return f"Erreur: La colonne '{e.args[0]}' est introuvable. Colonnes disponibles: {list(df.columns)}"
         return f"Erreur lors de la création du graphique : {str(e)}"
 
-# 2. L'outil LangChain qui est "vu" par le LLM
+# L'outil LangChain qui est "vu" par le LLM
 @tool
 def create_dynamic_chart(
     chart_type: str,
@@ -99,22 +99,17 @@ def create_dynamic_chart(
     color_column: str = None
 ) -> str:
     """
-    Crée un graphique dynamique et interactif avec Plotly. Les données sont fournies automatiquement.
-
-    Tu DOIS choisir le meilleur type de graphique en fonction de la demande de l'utilisateur et de la nature des données.
-    - Utilise 'line' pour les données chronologiques (ex: évolution d'une métrique sur plusieurs années).
-    - Utilise 'bar' pour comparer des catégories ou des valeurs à un instant T.
+    Crée un graphique dynamique et interactif. Les données sont fournies automatiquement.
+    Tu DOIS utiliser les noms de colonnes exacts qui te sont fournis dans le contexte actuel.
 
     Args:
-        chart_type (str): Le type de graphique à créer. Types supportés : 'line', 'bar', 'scatter', 'pie'.
-        x_column (str): Le nom de la colonne à utiliser pour l'axe des X.
-        y_column (str): Le nom de la colonne à utiliser pour l'axe des Y.
+        chart_type (str): Le type de graphique. Supportés : 'line', 'bar', 'scatter', 'pie'.
+        x_column (str): Nom exact de la colonne pour l'axe X.
+        y_column (str): Nom exact de la colonne pour l'axe Y.
         title (str): Un titre descriptif pour le graphique.
-        color_column (str, optional): La colonne à utiliser pour colorer les éléments du graphique.
+        color_column (str, optional): Nom exact de la colonne pour la couleur.
     """
-    # Cette fonction est une "coquille vide" pour LangChain. 
-    # La logique réelle est appelée depuis execute_tool_node dans agent.py.
-    return "[L'outil de création de graphique est prêt à être exécuté par le système.]"
+    return "[L'outil de création de graphique est prêt à être exécuté.]"
 
 @tool
 def get_stock_news(ticker: str) -> str:
@@ -128,11 +123,24 @@ def get_stock_news(ticker: str) -> str:
     """
     return "[Les actualités sont prêtes à être récupérées par le système.]"
 
+@tool
+def get_company_profile(ticker: str) -> str:
+    """
+    Utilise cet outil pour obtenir une description générale d'une entreprise.
+    Fournit des informations comme le secteur, le CEO, une description de l'activité, le site web et beaucoup d'autres.
+    C'est l'outil parfait si l'utilisateur demande "parle-moi de...", "que fait...", ou "qui est..." une entreprise.
+    
+    Args:
+        ticker (str): Le ticker de l'action à rechercher (ex: 'AAPL').
+    """
+    return "[Le profil de l'entreprise est prêt à être récupéré par le système.]"
+
 # --- La liste complète des outils disponibles pour l'agent ---
 available_tools = [
     search_ticker,
     fetch_data,
     get_stock_news,
+    get_company_profile,
     preprocess_data,
     predict_performance,
     display_raw_data,

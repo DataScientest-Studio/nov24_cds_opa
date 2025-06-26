@@ -67,6 +67,15 @@ for msg in st.session_state.messages:
                     st.plotly_chart(fig, use_container_width=True)
                 except Exception as e:
                     st.error(f"Impossible d'afficher le graphique : {e}")
+            # --- Logique pour le profil d'entreprise ---
+            if hasattr(msg, 'profile_json') and msg.profile_json:
+                try:
+                    profile_data = json.loads(msg.profile_json)
+                    if profile_data.get("image"):
+                        # On peut afficher le logo à côté du titre pour un effet pro
+                        st.image(profile_data["image"], width=60)
+                except Exception as e:
+                    print(f"Erreur affichage logo: {e}")
 
             # --- Logique pour les News ---
             if hasattr(msg, 'news_json') and msg.news_json:
@@ -137,11 +146,13 @@ if prompt := st.chat_input("Qu'est ce que je peux faire pour toi aujourd'hui ? �
                     ticker = last_message.tool_calls[0]['args'].get('ticker', '')
                     company_name = tool_args.get('company_name', 'l\'entreprise demandée')
                     if tool_name == 'search_ticker':
-                        thinking_placeholder.write(f"🔍 Recherche du ticker pour **{company_name}**...")
+                        thinking_placeholder.write(f"🔍 Recherche du ticker (identifiant boursier) pour **{company_name}**...")
                     elif tool_name == 'fetch_data':
                         thinking_placeholder.write(f"🔍 Recherche des données pour **{ticker}**...")
                     elif tool_name == 'get_stock_news':
                         thinking_placeholder.write(f"📰 Recherche des news pour **{ticker}**...")
+                    elif tool_name == 'get_company_profile':
+                        thinking_placeholder.write(f"ℹ️ Recherche d'informations officielles pour **{ticker}**...")
                     elif tool_name == 'preprocess_data':
                         thinking_placeholder.write("⚙️ Préparation des données pour l'analyse...")
                     elif tool_name == 'predict_performance':
