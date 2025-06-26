@@ -35,7 +35,7 @@ st.markdown("""
     <style>
         /* Cible les éléments de message de chat dans Streamlit */
         .stChatMessage .st-emotion-cache-1w7qfeb {
-            font-size: 20px; /* Modifie cette valeur pour changer la taille de la police */
+            font-size: 18px; /* Valeur à modifier pour changer la taille de la police */
         }
     </style>
 """, unsafe_allow_html=True)
