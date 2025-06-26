@@ -75,12 +75,34 @@ for msg in st.session_state.messages:
                     if not news_articles:
                         st.info("Je n'ai trouvé aucune actualité récente.")
                     else:
+                        # On ajoute un peu d'espace avant les articles
+                        st.write("---") 
+                        
                         for article in news_articles:
-                            with st.expander(f"📰 {article['title']}"):
+                            # On crée deux colonnes : une petite pour l'image, une grande pour le texte
+                            col1, col2 = st.columns([1, 4]) # Ratio 1:4
+
+                            with col1:
+                                # On affiche l'image si elle existe
                                 if article.get('image'):
-                                    st.image(article['image'])
-                                st.markdown(f"**Source:** {article.get('site', 'N/A')}")
-                                st.markdown(f"[Lire l'article complet]({article['url']})", unsafe_allow_html=True)
+                                    st.image(
+                                        article['image'], 
+                                        width=180, # On fixe une largeur pour que les images soient uniformes
+                                        use_container_width='never' # Important pour respecter la largeur fixée
+                                    )
+                                else:
+                                    # Placeholder si pas d'image, pour garder l'alignement
+                                    st.text(" ") 
+
+                            with col2:
+                                # On affiche le titre, la source et le lien
+                                st.markdown(f"**{article['title']}**")
+                                st.caption(f"Source : {article.get('site', 'N/A')}")
+                                st.markdown(f"<small><a href='{article['url']}' target='_blank'>Lire l'article</a></small>", unsafe_allow_html=True)
+                            
+                            # On ajoute un séparateur horizontal entre chaque article pour la clarté
+                            st.divider()
+
                 except Exception as e:
                     st.error(f"Impossible d'afficher les actualités : {e}")
 

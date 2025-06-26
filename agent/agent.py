@@ -396,6 +396,10 @@ def router(state: AgentState) -> str:
 
     # Le dernier message est-il une décision de l'IA d'appeler un outil ?
     last_message = messages[-1]
+
+    if isinstance(last_message, AIMessage) and not last_message.tool_calls:
+        print("Routeur -> Décision: L'IA a fourni une réponse textuelle. Fin du cycle.")
+        return END
     if isinstance(last_message, AIMessage) and last_message.tool_calls:
         # C'est la première fois qu'on voit cette décision, on doit exécuter l'outil.
         print("Routeur -> Décision: Appel d'outil demandé, passage à execute_tool.")
