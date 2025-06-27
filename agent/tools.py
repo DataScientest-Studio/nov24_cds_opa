@@ -159,19 +159,20 @@ def display_price_chart(ticker: str, period_days: int = 252) -> str:
     return "[Le graphique de prix est prêt à être généré.]"
 
 @tool
-def compare_stocks(tickers: List[str], metric: str, comparison_type: str = 'fundamental'):
+def compare_stocks(tickers: List[str], metric: str, comparison_type: str = 'fundamental', period_days: int = 252):
     """
     Compare plusieurs actions sur une métrique spécifique. Pour une métrique fondamentale,
-    cela montre TOUJOURS l'évolution sur plusieurs années. Pour le prix, cela montre la performance.
+    cela montre l'évolution sur plusieurs années. Pour le prix, cela montre la performance sur une période donnée.
     C'est l'outil principal pour toute demande contenant "compare", "vs", "versus", "par rapport à".
 
     Args:
         tickers (List[str]): La liste des tickers à comparer (ex: ['AAPL', 'MSFT', 'GOOGL']).
         metric (str): La métrique à comparer. 
                       - Pour les données fondamentales, utilise le nom exact (ex: 'roe', 'marketCap').
-                      - Pour le prix, utilise la valeur 'price'.
+                      - Pour le prix, utilise TOUJOURS la valeur 'price'.
         comparison_type (str): Le type de comparaison. 'fundamental' ou 'price'. Le LLM doit déduire
                                le type en fonction de la métrique demandée ('price' vs autre chose).
+        period_days (int): Pour une comparaison de prix, spécifie la période. 30 (1 mois), 90 (3 mois), 252 (1 an), etc. La valeur par défaut est 252.
     """
     return "[La comparaison est prête à être exécutée par le système.]"
 
@@ -188,5 +189,4 @@ available_tools = [
     create_dynamic_chart,
     display_price_chart,
      compare_stocks
-    
 ]

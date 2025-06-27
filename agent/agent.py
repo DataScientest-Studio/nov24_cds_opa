@@ -1,24 +1,33 @@
 # agent.py
+
+# Variables d'environnement
 import os
+
+# Variables et données
 import json
 from typing import TypedDict, List, Annotated, Any
 import pandas as pd
-import plotly.express as px
-import plotly.io as pio
-import plotly.graph_objects as go
-import uuid
 from io import StringIO
 import textwrap
 
+# Graphiques
+import plotly.express as px
+import plotly.io as pio
+import plotly.graph_objects as go
+
+# Numéro de session unique
+import uuid
+
+# Import de scripts
 from src.fetch_data import APILimitError 
 from src.chart_theme import stella_theme 
 
+# LangGraph et LangChain
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import HumanMessage, AIMessage, BaseMessage, ToolMessage, SystemMessage
 from langgraph.graph import StateGraph, END
 from langgraph.graph.message import AnyMessage, add_messages
 from langgraph.checkpoint.memory import MemorySaver
-
 
 # --- Import des tools ---
 from tools import (
@@ -67,6 +76,11 @@ class AgentState(TypedDict):
 # agent.py
 
 system_prompt = """Ton nom est Stella. Tu es une assistante experte financière. Ton but principal est d'aider les utilisateurs en analysant des actions.
+
+**Règle d'Or : Le Contexte est Roi**
+Tu DOIS toujours prendre en compte les messages précédents pour comprendre la demande actuelle. 
+Si un utilisateur demande de modifier ou d'ajouter quelque chose, tu dois te baser sur l'analyse ou le graphique qui vient d'être montré. 
+Ne recommence jamais une analyse de zéro si ce n'est pas explicitement demandé.
 
 **Liste des outils disponibles**
 1. `search_ticker`: Recherche le ticker boursier d'une entreprise à partir de son nom.
@@ -130,6 +144,16 @@ Quand l'utilisateur demande de comparer plusieurs entreprises (ex: "compare le R
 2.  Utilise l'outil `compare_stocks` en fournissant la liste des tickers et la métrique demandée.
     - Pour une métrique financière (ROE, dette, etc.), utilise `comparison_type='fundamental'`. Cela affichera toujours l'évolution dans le temps.
     - Pour une comparaison de performance de l'action, utilise `metric='price'` et `comparison_type='price'`.
+
+**Gestion des Questions de Suivi (Très Important !)**
+
+*   **Si je montre un graphique et que l'utilisateur dit "et pour [nouveau ticker] ?"**: Tu dois comprendre qu'il faut ajouter ce ticker au graphique existant. Tu rappelleras `compare_stocks` avec la liste des tickers initiaux PLUS le nouveau.
+    *Ex: L'agent montre un graphique de prix pour `['AAPL', 'GOOG']`. L'utilisateur dit "rajoute Meta". L'agent doit appeler `compare_stocks(tickers=['AAPL', 'GOOG', 'META'], metric='price', ...)`.*
+
+*   **Si l'utilisateur demande de changer la période**: Tu dois refaire le dernier graphique avec la nouvelle période.
+    *Ex: L'agent montre un graphique sur 1 an. L'utilisateur dit "montre sur 5 ans". L'agent doit rappeler le même outil avec `period_days=1260`.*
+
+*   **Pour le NASDAQ 100**: Utilise le ticker de l'ETF `QQQ`. Pour le S&P 500, utilise `SPY`. Si l'utilisateur mentionne un indice, ajoute son ticker à la liste pour la comparaison de prix.
 
 Tu dois toujours répondre en français et tutoyer ton interlocuteur.
 """
@@ -329,12 +353,13 @@ def execute_tool_node(state: AgentState):
                     )
                 elif comparison_type == 'price':
                     # La logique pour le prix ne change pas, elle est déjà une évolution
-                    comp_df = _compare_price_histories_logic(tickers=tickers)
+                    period = tool_args.get("period_days", 252)
+                    comp_df = _compare_price_histories_logic(tickers=tickers, period_days=period)
                     fig = px.line(
                         comp_df,
                         title=f"Comparaison de la performance des actions (Base 100)",
                         labels={'value': 'Performance Normalisée (Base 100)', 'variable': 'Ticker', 'index': 'Date'},
-                        color_discrete_sequence=stella_theme['colors']  # Utilise la palette de couleurs Stella
+                        color_discrete_sequence=stella_theme['colors']
                     )
                 else:
                     raise ValueError(f"Type de comparaison inconnu: {comparison_type}")

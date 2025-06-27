@@ -65,7 +65,7 @@ https://www.anaconda.com/docs/getting-started/miniconda/install
 
 **Pour créer l'environnement de l'agent contenant les dépendances**
   
-```conda env create -f environment.yml -n agent```
+```conda env create -f environment.yml```
   
 
 Obtention des clefs API
@@ -129,7 +129,7 @@ Lancement de l'agent
   
 **Activer l'envrionnement pour la session en cours**
   
-```conda activate agent```
+```conda activate stella```
 
 **Lancer l'application Streamlit**
   
