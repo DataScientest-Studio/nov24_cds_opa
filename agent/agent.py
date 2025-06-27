@@ -411,12 +411,12 @@ def generate_final_response_node(state: AgentState):
     # Logique de la réponse textuelle basée sur la prédiction
     if prediction_result == "Risque Élevé Détecté":
         response_content = (
-            f"⚠️ **Attention !** Pour l'action **{ticker.upper()}**, en se basant sur les données de **{latest_year_str}**, mon analyse a détecté des signaux indiquant un **risque élevé de sous-performance pour l'année à venir ({next_year_str})**.\n\n"
+            f"⚠️ **Attention !** Pour l'action **{ticker.upper()}**, en se basant sur les données de **{latest_year_str} (dernières données disponibles)**, mon analyse a détecté des signaux indiquant un **risque élevé de sous-performance pour l'année à venir ({next_year_str})**.\n\n"
             "Mon modèle est particulièrement confiant dans cette évaluation. Je te conseille la plus grande prudence."
         )
     elif prediction_result == "Aucun Risque Extrême Détecté":
         response_content = (
-            f"Pour l'action **{ticker.upper()}**, en se basant sur les données de **{latest_year_str}**, mon analyse n'a **pas détecté de signaux de danger extrême pour l'année à venir ({next_year_str})**.\n\n"
+            f"Pour l'action **{ticker.upper()}**, en se basant sur les données de **{latest_year_str}** (dernières données disponibles), mon analyse n'a **pas détecté de signaux de danger extrême pour l'année à venir ({next_year_str})**.\n\n"
             "**Important :** Cela ne signifie pas que c'est un bon investissement. Cela veut simplement dire que mon modèle, spécialisé dans la détection de signaux très négatifs, n'en a pas trouvé ici. Mon rôle est de t'aider à éviter une erreur évidente, pas de te garantir un succès."
         )
     else:
@@ -505,7 +505,7 @@ def generate_final_response_node(state: AgentState):
                 )
                 
                 chart_json = pio.to_json(fig)
-                response_content += f"**Voici une visualisation de sa croissance par rapport à sa valorisation :**"
+                response_content += f"\n\n**Voici une visualisation de sa croissance par rapport à sa valorisation :**"
                 
                 # On crée le texte explicatif et on l'ajoute à la suite
                 explanation_text = textwrap.dedent("""

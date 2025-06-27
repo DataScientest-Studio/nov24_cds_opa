@@ -45,7 +45,7 @@ if "messages" not in st.session_state:
     welcome_message = textwrap.dedent("""
     Hello ! Je suis Stella. Je peux t'aider à analyser le potentiel d'une action. Que souhaites-tu faire ?
     
-    *(Si tu ne sais pas par où démarrer, tu peux me demander de t'expliquer comment je fonctionne.)*
+    *(Si tu ne sais pas par où démarrer, tu peux me demander de t'expliquer comment je peux t'aider.)*
     """)
     st.session_state.messages = [AIMessage(content=welcome_message)]
 if "session_id" not in st.session_state:
