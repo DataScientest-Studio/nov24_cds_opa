@@ -175,8 +175,6 @@ def agent_node(state: AgentState):
     # Cette liste est locale et ne modifie pas l'état directement
     response = llm.bind_tools(available_tools).invoke(current_messages)
     
-    # On retourne UNIQUEMENT la nouvelle réponse de l'IA. 
-    # add_messages s'occupera de l'ajouter correctement à l'état, de manière sérialisable.
     return {"messages": [response]}
 
 # Noeud 2 : execute_tool_node, exécute les outils en se basant sur la décision de l'agent_node (Noeud 1).
@@ -660,7 +658,7 @@ def router(state: AgentState) -> str:
         return END
         
     tool_name = ai_message_with_tool_call.tool_calls[-1]['name']
-    print(f"--- DEBUG ROUTEUR: Le dernier outil appelé était '{tool_name}'. ---")
+    print(f"--- ROUTEUR: Le dernier outil appelé était '{tool_name}'. ---")
 
     # Maintenant, on décide de la suite en fonction de cet outil.
     if tool_name == 'predict_performance':

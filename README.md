@@ -104,7 +104,7 @@ Ajout des variables d'envrionnement
 
 ```nano ~/.bashrc```
   
-**Ajouter ces trois lignes dans le fichier ma_clef_api à chaque fois**
+**Ajouter ces trois lignes dans le fichier en remplaçant ma_clef_api à chaque fois**
    
 ```export OPENROUTER_API_KEY="ma_clef_api_openrouter"```
   
@@ -116,7 +116,7 @@ Ajout des variables d'envrionnement
   
 ```nano ~/.zshrc```
   
-**Ajouter ces trois lignes dans le fichier ma_clef_api à chaque fois**
+**Ajouter ces trois lignes dans le fichier en remplaçant ma_clef_api à chaque fois**
   
 ```export OPENROUTER_API_KEY="ma_clef_api_openrouter"```
   
