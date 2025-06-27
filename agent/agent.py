@@ -240,12 +240,19 @@ def execute_tool_node(state: AgentState):
                     current_state_updates["error"] = user_friendly_error
             
             elif tool_name == "get_stock_news":
-                ticker = state.get("ticker")
-                company_name = state.get("company_name") or ticker
                 
+                # 1. On cherche le ticker dans les arguments fournis par le LLM, SINON dans l'état.
+                ticker = tool_args.get("ticker") or state.get("ticker")
+                
+                # 2. Si après tout ça, on n'a toujours pas de ticker, c'est une vraie erreur.
                 if not ticker:
-                    raise ValueError("Aucun ticker trouvé dans l'état pour chercher des nouvelles.")
+                    raise ValueError("Impossible de déterminer un ticker pour chercher les nouvelles, ni dans la commande, ni dans le contexte.")
                 
+                # 3. On fait pareil pour le nom de l'entreprise (qui est optionnel mais utile)
+                # On utilise le ticker comme nom si on n'a rien d'autre.
+                company_name = tool_args.get("company_name") or state.get("company_name") or ticker
+                
+                # 4. On appelle la logique avec les bonnes informations.
                 news_summary = _fetch_recent_news_logic(
                     ticker=ticker, 
                     company_name=company_name

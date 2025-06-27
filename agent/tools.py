@@ -124,14 +124,14 @@ def create_dynamic_chart(
     return "[L'outil de création de graphique est prêt à être exécuté.]"
 
 @tool
-def get_stock_news(ticker: str) -> str:
+def get_stock_news(ticker: str, company_name: str = None) -> str:
     """
-    Utilise cet outil pour trouver les dernières actualités financières.
-    Il fonctionne mieux si on lui fournit à la fois le ticker et le nom de l'entreprise.
+    Utilise cet outil pour trouver les dernières actualités pour une entreprise.
+    Tu peux l'utiliser si on te demande "les nouvelles", "les actualités", "que se passe-t-il avec...".
     
     Args:
-        ticker (str): Le ticker de l'action (ex: 'AAPL').
-        company_name (str, optional): Le nom de l'entreprise (ex: 'Apple').
+        ticker (str): Le ticker de l'action (ex: 'AAPL'). Tu dois le trouver avec search_ticker si besoin.
+        company_name (str, optional): Le nom complet de l'entreprise (ex: 'Apple Inc.'). Peut améliorer la pertinence de la recherche.
     """
     return "[Les actualités sont prêtes à être récupérées par le système.]"
 
