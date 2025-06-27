@@ -5,9 +5,13 @@ from typing import TypedDict, List, Annotated, Any
 import pandas as pd
 import plotly.express as px
 import plotly.io as pio
+import plotly.graph_objects as go
 import uuid
 from io import StringIO
+import textwrap
+
 from src.fetch_data import APILimitError 
+from src.chart_theme import stella_theme 
 
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import HumanMessage, AIMessage, BaseMessage, ToolMessage, SystemMessage
@@ -26,7 +30,9 @@ from tools import (
     _predict_performance_logic, 
     _create_dynamic_chart_logic,
     _fetch_profile_logic,
-    _fetch_price_history_logic
+    _fetch_price_history_logic,
+    _compare_fundamental_metrics_logic,
+    _compare_price_histories_logic
 )
 
 # --- Initalisation du LLM ---
@@ -65,7 +71,7 @@ system_prompt = """Ton nom est Stella. Tu es une assistante experte financière.
 **Liste des outils disponibles**
 1. `search_ticker`: Recherche le ticker boursier d'une entreprise à partir de son nom.
 2. `fetch_data`: Récupère les données financières fondamentales pour un ticker boursier donné.
-3. `preprocess_data`: Prépare les données financières récupérées pour la prédiction.
+3. `preprocess_data`: Prépare et nettoie les données financières récupérées pour la prédiction. A utiliser si on demande les données nettoyées, pré-traitées, etc...
 4. `predict_performance`: Prédit la performance d'une action en se basant sur les données prétraitées.
 5. `display_price_chart`: Affiche un graphique de l'évolution du prix (cours) d'une action. A utiliser si on demande "le prix", "le cours", "graphique de l'action", etc. 
 6. `display_raw_data`: Affiche le tableau de données financières brutes qui ont été initialement récupérées.
@@ -73,6 +79,7 @@ system_prompt = """Ton nom est Stella. Tu es une assistante experte financière.
 8. `create_dynamic_chart`: Crée un graphique interactif basé sur les données financières prétraitées.
 9. `get_stock_news`: Récupère les dernières actualités pour un ticker donné.
 10. `get_company_profile`: Récupère le profil d'une entreprise, incluant des informations clés comme le nom, le secteur, l'industrie, le CEO, etc.
+11. `compare_stocks`: Compare plusieurs entreprises sur une métrique financière ou sur leur prix. A utiliser pour toute demande contenant "compare", "vs", "versus".
 
 Si l'utilisateur te demande comment tu fonctionnes, à quoi tu sers, ou toute autre demande similaire tu n'utiliseras pas d'outils. 
 Tu expliqueras simplement ton rôle et tes fonctionnalités en donnant des exemples de demandes qu'on peut te faire.
@@ -116,6 +123,13 @@ Tu peux aussi proposer de le faire après une analyse complète.
 **Profil de l'entreprise :**
 Si l'utilisateur demande "le profil", "des informations", "une présentation" ou autre demande similaire pour une entreprise, utilise l'outil `get_company_profile`. 
 Tu peux aussi proposer de le faire après une analyse complète.
+
+**Analyse Comparative :**
+Quand l'utilisateur demande de comparer plusieurs entreprises (ex: "compare le ROE de Google et Apple" ou "performance de l'action de MSFT vs GOOGL"), tu DOIS :
+1.  Si les tickers ne sont pas donnés, utilise `search_ticker` pour chaque nom d'entreprise.
+2.  Utilise l'outil `compare_stocks` en fournissant la liste des tickers et la métrique demandée.
+    - Pour une métrique financière (ROE, dette, etc.), utilise `comparison_type='fundamental'`. Cela affichera toujours l'évolution dans le temps.
+    - Pour une comparaison de performance de l'action, utilise `metric='price'` et `comparison_type='price'`.
 
 Tu dois toujours répondre en français et tutoyer ton interlocuteur.
 """
@@ -287,14 +301,52 @@ def execute_tool_node(state: AgentState):
                     price_df, 
                     x=price_df.index, 
                     y='close', 
-                    title=f"Historique du cours de {ticker.upper()} sur {period} jours"
+                    title=f"Historique du cours de {ticker.upper()} sur {period} jours",
+                    color_discrete_map=stella_theme['metric_colors']
+
                 )
-                fig.update_layout(template="plotly_white", xaxis_title="Date", yaxis_title="Prix de clôture (USD)")
+                fig.update_layout(template=stella_theme['template'], font=stella_theme['font'], xaxis_title="Date", yaxis_title="Prix de clôture (USD)")
                 
                 # On convertit en JSON et on met à jour l'état
                 chart_json = pio.to_json(fig)
                 current_state_updates["plotly_json"] = chart_json
                 tool_outputs.append(ToolMessage(tool_call_id=tool_id, content="[Graphique de prix créé avec succès.]"))
+
+            elif tool_name == "compare_stocks":
+                tickers = tool_args.get("tickers")
+                metric = tool_args.get("metric")
+                comparison_type = tool_args.get("comparison_type", "fundamental")
+
+                if comparison_type == 'fundamental':
+                    # On appelle la fonction qui retourne l'historique
+                    comp_df = _compare_fundamental_metrics_logic(tickers=tickers, metric=metric)
+                    fig = px.line(
+                        comp_df,
+                        x=comp_df.index,
+                        y=comp_df.columns,
+                        title=f"Évolution de la métrique '{metric.upper()}'",
+                        labels={'value': metric.upper(), 'variable': 'Ticker', 'calendarYear': 'Année'},
+                        markers=True, # Les marqueurs sont utiles pour voir les points de données annuels
+                        color_discrete_sequence=stella_theme['colors']  # Utilise la palette de couleurs Stella
+                    )
+                elif comparison_type == 'price':
+                    # La logique pour le prix ne change pas, elle est déjà une évolution
+                    comp_df = _compare_price_histories_logic(tickers=tickers)
+                    fig = px.line(
+                        comp_df,
+                        title=f"Comparaison de la performance des actions (Base 100)",
+                        labels={'value': 'Performance Normalisée (Base 100)', 'variable': 'Ticker', 'index': 'Date'},
+                        color_discrete_sequence=stella_theme['colors']  # Utilise la palette de couleurs Stella
+                    )
+                else:
+                    raise ValueError(f"Type de comparaison inconnu: {comparison_type}")
+
+                # Le reste du code est commun et ne change pas
+                fig.update_layout(template="plotly_white")
+                chart_json = pio.to_json(fig)
+                current_state_updates["plotly_json"] = chart_json
+                current_state_updates["tickers"] = tickers
+                tool_outputs.append(ToolMessage(tool_call_id=tool_id, content="[Graphique de comparaison créé.]"))
             
         except Exception as e:
             # Bloc de capture générique pour toutes les autres erreurs
@@ -349,28 +401,103 @@ def generate_final_response_node(state: AgentState):
 
     # --- 3. Création du graphique de synthèse ---
     chart_json = None
+    explanation_text = None 
     if processed_df_json:
         try:
             df = pd.read_json(StringIO(processed_df_json), orient='split')
-            metrics_to_plot = ['roe', 'debtToEquity', 'earningsYield', 'marginProfit']
+            # Les colonnes dont nous avons besoin pour ce nouveau graphique
+            metrics_to_plot = ['calendarYear', 'revenuePerShare_YoY_Growth', 'earningsYield']
             
-            # On s'assure que les colonnes existent avant de les utiliser
+            # On s'assure que les colonnes existent
             plot_cols = [col for col in metrics_to_plot if col in df.columns]
             
-            if not df.empty and plot_cols:
-                chart_title = f"Indicateurs Clés pour {ticker.upper()} ({latest_year_str})"
+            if not df.empty and all(col in plot_cols for col in metrics_to_plot):
+                chart_title = f"Analyse Croissance vs. Valorisation pour {ticker.upper()}"
                 
-                # Préparation des données pour le bar chart
-                df_for_plot = df[plot_cols].iloc[-1].reset_index()
-                df_for_plot.columns = ['Indicateur', 'Valeur']
+                # Créer la figure de base
+                fig = go.Figure()
+
+                # 1. Ajouter les barres de Croissance du CA (% YoY) sur l'axe Y1
+                fig.add_trace(go.Scatter(
+                    x=df['calendarYear'],
+                    y=df['revenuePerShare_YoY_Growth'],
+                    name='Croissance du CA (%)',
+                    mode='lines+markers', # On spécifie le mode ligne avec marqueurs
+                    line=dict(color=stella_theme['colors'][1]), # On utilise 'line' pour la couleur
+                    yaxis='y1'
+                ))
+
+                # 2. Ajouter la ligne de Valorisation (Earnings Yield) sur l'axe Y2
+                fig.add_trace(go.Scatter(
+                    x=df['calendarYear'],
+                    y=df['earningsYield'],
+                    name='Rendement des Bénéfices (Valorisation)',
+                    mode='lines+markers',
+                    line=dict(color=stella_theme['colors'][0]), # Bleu Stella
+                    yaxis='y2'
+                ))
                 
-                fig = px.bar(df_for_plot, x='Indicateur', y='Valeur', title=chart_title, color='Indicateur',
-                             text_auto='.2f') # Affiche les valeurs sur les barres
-                fig.update_layout(template="plotly_white", font=dict(family="Arial, sans-serif"), showlegend=False)
+                # Ajouter une ligne à zéro pour mieux visualiser la croissance positive/négative
+                fig.add_hline(y=0, line_width=1, line_dash="dash", line_color="white", yref="y1")
+
+                # 3. Configurer les axes et le layout
+                fig.update_layout(
+                    title_text=chart_title,
+                    template=stella_theme['template'],
+                    font=stella_theme['font'],
+                    margin=dict(r=320),
+                    xaxis=dict(
+                        title='Année',
+                        type='category' # Force l'axe à traiter les années comme des étiquettes uniques
+                    ),
+                    yaxis=dict(
+                        title=dict(
+                            text='Croissance Annuelle du CA',
+                            font=dict(color=stella_theme['colors'][1])
+                        ),
+                        tickfont=dict(color=stella_theme['colors'][1]),
+                        ticksuffix=' %'
+                    ),
+                    yaxis2=dict(
+                        title=dict(
+                            text='Rendement des Bénéfices (inverse du P/E)',
+                            font=dict(color=stella_theme['colors'][0]) 
+                        ),
+                        tickfont=dict(color=stella_theme['colors'][0]),
+                        anchor='x',
+                        overlaying='y',
+                        side='right',
+                        tickformat='.2%'
+                    ),
+                    legend=dict(
+                        orientation="v",
+                        yanchor="top",
+                        y=1, # On aligne le haut de la légende avec le haut du graphique
+                        xanchor="left",
+                        x=1.20, # On pousse la légende un peu plus à droite
+                        bordercolor="rgba(0, 0, 0, 0.2)", # Bordure légère
+                        borderwidth=1,
+                        title_text="Légende"
+                    )
+                )
+                
                 chart_json = pio.to_json(fig)
-                response_content += f"\n\nVoici une visualisation des indicateurs qui ont servi à cette analyse :"
+                response_content += f"**Voici une visualisation de sa croissance par rapport à sa valorisation :**"
+                
+                # On crée le texte explicatif et on l'ajoute à la suite
+                explanation_text = textwrap.dedent("""
+                    ---
+                    **Comment interpréter ce graphique ?**
+
+                    Ce graphique croise deux questions clés : "L'entreprise grandit-elle ?" et "Quel prix le marché paie-t-il pour cette croissance ?".
+
+                    *   🟠 **La ligne orange (Croissance)** : Elle montre la tendance de la croissance du chiffre d'affaires. Une courbe ascendante indique une accélération.
+                    *   🟣 **La ligne violette (Valorisation)** : Elle représente le rendement des bénéfices (l'inverse du fameux P/E Ratio). **Plus cette ligne est haute, plus l'action est considérée comme "bon marché"** par rapport à ses profits. Une ligne basse indique une action "chère".
+
+                    **L'analyse clé :** Idéalement, on recherche une croissance qui accélère (ligne orange qui monte) avec une valorisation qui reste raisonnable (ligne violette stable ou qui monte). Une croissance qui ralentit (ligne orange qui plonge) alors que l'action devient plus chère (ligne violette qui plonge) est souvent un signal de prudence.
+                """)
             else:
-                response_content += "\n\n(Impossible de générer le graphique : données ou colonnes manquantes)."
+                response_content += "\n\n(Impossible de générer le graphique de synthèse Croissance/Valorisation : données ou colonnes manquantes)."
 
         except Exception as e:
             print(f"Erreur lors de la création du graphique par défaut : {e}")
@@ -379,18 +506,30 @@ def generate_final_response_node(state: AgentState):
     # --- 4. Création du message final ---
     final_message = AIMessage(content=response_content)
     if chart_json:
+        # On attache le graphique ET le texte explicatif au message
         setattr(final_message, 'plotly_json', chart_json)
-    
+        if explanation_text:
+            setattr(final_message, 'explanation_text', explanation_text)
+
     return {"messages": [final_message]}
 
 # Noeud 4 : cleanup_state_node, nettoie l'état pour éviter de stocker des données lourdes.
 def cleanup_state_node(state: AgentState):
     """
-    Nettoie l'état pour la prochaine interaction, en ne supprimant que les données
-    spécifiques à la dernière réponse (le graphique) mais en gardant le contexte (les données).
+    Nettoie l'état pour la prochaine interaction.
+    Il efface les données spécifiques à la dernière réponse (prédiction, graphique)
+    mais GARDE le contexte principal (données brutes et traitées, ticker)
+    pour permettre des questions de suivi.
     """
-    print("\n--- SYSTEM: Nettoyage partiel du state avant la sauvegarde ---")
-    return {"plotly_json": ""}
+    print("\n--- SYSTEM: Nettoyage partiel de l'état avant la sauvegarde ---")
+    
+    # On garde : 'ticker', 'tickers', 'company_name', 'fetched_df_json', 'processed_df_json'
+    # On supprime (réinitialise) :
+    return {
+        "prediction": "",   # Efface la prédiction précédente
+        "plotly_json": "",  # Efface le graphique précédent
+        "error": ""         # Efface toute erreur précédente
+    }
 
 # Noeuds supplémentaires de préparation pour l'affichage des données, graphiques, actualités et profil d'entreprise.
 def prepare_data_display_node(state: AgentState):
@@ -418,7 +557,7 @@ def prepare_chart_display_node(state: AgentState):
     print("\n--- AGENT: Préparation du graphique pour l'affichage ---")
     
     # Laisse le LLM générer une courte phrase d'introduction
-    response = ("Voici le graphgique demandé : ")
+    response = ("Voici le graphique demandé : ")
     
     final_message = AIMessage(content=response)
     setattr(final_message, 'plotly_json', state["plotly_json"])
@@ -467,9 +606,11 @@ def prepare_profile_display_node(state: AgentState):
     {tool_message.content}
     
     Rédige une réponse la plus exhaustive et agréable possible pour présenter ces informations à l'utilisateur.
-    Mets en avant le nom de l'entreprise, son secteur et son CEO, mais n'omet aucune information dans le JSON.
-    Tu n'afficheras pas l'image du logo, l'UI s'en chargera.
+    Mets en avant le nom de l'entreprise, son secteur et son CEO, mais n'omet aucune information qui n'est pas null dans le JSON.
+    Tu n'afficheras pas l'image du logo, l'UI s'en chargera, et tu n'as pas besoin de la mentionner.
     Présente les informations de manière sobre en listant les points du JSON.
+    Si il y a un champ null, TU DOIS TOUJOURS le compléter via tes connaissances, sans inventer de données.
+    Si tu ne trouves pas d'informations, indique simplement "Inconnu" ou "Non disponible".
     Termine en donnant le lien vers leur site web.
     """
     response = llm.invoke(prompt)
@@ -524,6 +665,8 @@ def router(state: AgentState) -> str:
     # Maintenant, on décide de la suite en fonction de cet outil.
     if tool_name == 'predict_performance':
         return "generate_final_response"
+    elif tool_name == 'compare_stocks': 
+        return "prepare_chart_display"
     elif tool_name == 'display_price_chart':
         return "prepare_chart_display"
     elif tool_name in ['display_raw_data', 'display_processed_data']:
@@ -534,7 +677,7 @@ def router(state: AgentState) -> str:
         return "prepare_news_display"
     elif tool_name == 'get_company_profile': 
         return "prepare_profile_display"
-    else: # Pour search_ticker, fetch_data, preprocess_data
+    else: # Pour search_ticker, fetch_data, preprocess_data, etc
         return "agent"
     
 # --- CONSTRUCTION DU GRAPH ---
@@ -567,11 +710,14 @@ workflow.add_conditional_edges(
     }
 )
 
+# Tous les noeuds finaux mènent d'abord au nettoyage
 workflow.add_edge("generate_final_response", "cleanup_state")
-workflow.add_edge("prepare_profile_display", END)
-workflow.add_edge("prepare_data_display", END) 
-workflow.add_edge("prepare_chart_display", END)
-workflow.add_edge("prepare_news_display", END)
+workflow.add_edge("prepare_profile_display", "cleanup_state")
+workflow.add_edge("prepare_data_display", "cleanup_state")
+workflow.add_edge("prepare_chart_display", "cleanup_state")
+workflow.add_edge("prepare_news_display", "cleanup_state")
+
+# Après le nettoyage, le cycle est vraiment terminé.
 workflow.add_edge("cleanup_state", END)
 
 app = workflow.compile(checkpointer=memory)
@@ -586,7 +732,7 @@ try:
     print("\nVisualisation du graph sauvegardée dans le répertoire en tant que agent_workflow.png \n")
 
 except Exception as e:
-    print(f"\nJe n'ai pas pu généré la visualisation. Lancez 'pip install playwright' et 'playwright install'. Erreur: {e}\n")
+    print(f"\nJe n'ai pas pu générer la visualisation. Lancez 'pip install playwright' et 'playwright install'. Erreur: {e}\n")
 
 # --- Bloc test main ---
 if __name__ == '__main__':

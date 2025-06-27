@@ -45,7 +45,8 @@ Liste des outils et capacités de l'agent
 8. `create_dynamic_chart`: Crée un graphique interactif basé sur les données financières prétraitées.
 9. `get_stock_news`: Récupère les dernières actualités pour un ticker donné.
 10. `get_company_profile`: Récupère le profil d'une entreprise, incluant des informations clés comme le nom, le secteur, l'industrie, le CEO, etc.
-
+11. `compare_stocks`: Compare plusieurs entreprises sur une métrique financière ou sur leur prix.
+  
 Workflow de l'agent
 ------------
 ![Workflow de l'agent](agent_workflow.png)

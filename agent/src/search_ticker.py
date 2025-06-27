@@ -27,7 +27,7 @@ def search_ticker(company_name: str) -> str:
             raise APILimitError(f"Désolé, je n'ai trouvé aucune entreprise correspondant à '{company_name}'.")
         
         # On définit des listes de priorité pour les bourses et les devises
-        preferred_exchanges = ["NYSE", "NASDAQ", "PAR"]
+        preferred_exchanges = ["PAR", "NYSE", "NASDAQ"]
         preferred_currency = "USD"
         
         best_ticker = None

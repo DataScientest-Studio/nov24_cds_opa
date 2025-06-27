@@ -8,7 +8,7 @@ import plotly.io as pio
 import plotly.graph_objects as go
 from io import StringIO
 import json
-
+import textwrap
 
 # --- Import de l'agent LangGraph ---
 from agent import app
@@ -42,7 +42,12 @@ st.markdown("""
 
 # --- Initialisation du session_state pour les messages et d'un ID de session unique ---
 if "messages" not in st.session_state:
-    st.session_state.messages = [AIMessage(content="Hello!  Je suis Stella. Je peux t'aider à analyser le potentiel d'une action. Que souhaites-tu faire ?")]
+    welcome_message = textwrap.dedent("""
+    Hello ! Je suis Stella. Je peux t'aider à analyser le potentiel d'une action. Que souhaites-tu faire ?
+    
+    *(Si tu ne sais pas par où démarrer, tu peux me demander de t'expliquer comment je fonctionne.)*
+    """)
+    st.session_state.messages = [AIMessage(content=welcome_message)]
 if "session_id" not in st.session_state:
     st.session_state.session_id = str(uuid.uuid4())
 
@@ -67,6 +72,11 @@ for msg in st.session_state.messages:
                     st.plotly_chart(fig, use_container_width=True)
                 except Exception as e:
                     st.error(f"Impossible d'afficher le graphique : {e}")
+
+            # --- Logique pour le texte explicatif ---
+            if hasattr(msg, 'explanation_text') and msg.explanation_text:
+                st.markdown(msg.explanation_text)
+
             # --- Logique pour le profil d'entreprise ---
             if hasattr(msg, 'profile_json') and msg.profile_json:
                 try:
@@ -126,10 +136,11 @@ if prompt := st.chat_input("Qu'est ce que je peux faire pour toi aujourd'hui ? �
         st.write(prompt)
 
     with st.chat_message("assistant", avatar=STELLA_AVATAR):
+        # --- DÉBUT DU BLOC AMÉLIORÉ ---
         thinking_placeholder = st.empty()
-        thinking_placeholder.write("🧠 Hmm, laisse moi réfléchir...")
+        thinking_placeholder.write("🧠 Hmm, laisse-moi réfléchir une seconde...")
 
-        inputs = {"messages": st.session_state.messages} # On envoie tout l'historique
+        inputs = {"messages": st.session_state.messages}
         config = {"configurable": {"thread_id": st.session_state.session_id}}
         
         final_response = None
@@ -137,28 +148,57 @@ if prompt := st.chat_input("Qu'est ce que je peux faire pour toi aujourd'hui ? �
         try:
             # On streame les events pour afficher les étapes en temps réel
             for event in app.stream(inputs, config=config, stream_mode="values"):
-                # `event` est l'état complet du graphe à chaque étape
-                # On cherche la dernière AIMessage qui contient un appel d'outil
                 last_message = event["messages"][-1]
+                
+                # On vérifie si l'IA a décidé d'appeler un outil
                 if isinstance(last_message, AIMessage) and last_message.tool_calls:
-                    tool_name = last_message.tool_calls[0]['name']
-                    tool_args = last_message.tool_calls[0]['args']
-                    ticker = last_message.tool_calls[0]['args'].get('ticker', '')
-                    company_name = tool_args.get('company_name', 'l\'entreprise demandée')
+                    tool_call = last_message.tool_calls[0] # On se concentre sur le premier appel
+                    tool_name = tool_call['name']
+                    tool_args = tool_call['args']
+                    
+                    # --- Messages de feedback verbeux et engageants ---
+                    
+                    # --- Outils de recherche initiaux ---
                     if tool_name == 'search_ticker':
-                        thinking_placeholder.write(f"🔍 Recherche du ticker (identifiant boursier) pour **{company_name}**...")
-                    elif tool_name == 'fetch_data':
-                        thinking_placeholder.write(f"🔍 Recherche des données pour **{ticker}**...")
-                    elif tool_name == 'get_stock_news':
-                        thinking_placeholder.write(f"📰 Recherche des news pour **{ticker}**...")
+                        company_name = tool_args.get('company_name', 'l\'entreprise demandée')
+                        thinking_placeholder.write(f"🔍 Parfait, je commence par chercher l'identifiant boursier pour **{company_name}**...")
+                    
                     elif tool_name == 'get_company_profile':
-                        thinking_placeholder.write(f"ℹ️ Recherche d'informations officielles pour **{ticker}**...")
+                        ticker = tool_args.get('ticker', 'l\'action')
+                        thinking_placeholder.write(f"ℹ️ D'accord, je rassemble les informations générales (secteur, activité...) pour **{ticker.upper()}**.")
+                    
+                    # --- Outils de récupération de données ---
+                    elif tool_name == 'fetch_data':
+                        ticker = tool_args.get('ticker', 'l\'action')
+                        thinking_placeholder.write(f"📊 Je récupère maintenant les données fondamentales pour **{ticker.upper()}**. Un instant...")
+                        
+                    elif tool_name == 'get_stock_news':
+                        ticker = tool_args.get('ticker', 'l\'action')
+                        thinking_placeholder.write(f"📰 Je consulte les dernières news pour voir ce qui se dit sur **{ticker.upper()}**.")
+
+                    # --- Outils d'analyse complète ---
                     elif tool_name == 'preprocess_data':
-                        thinking_placeholder.write("⚙️ Préparation des données pour l'analyse...")
+                        thinking_placeholder.write("⚙️ Les données sont là ! Je les nettoie et calcule quelques indicateurs clés pour mon analyse...")
+                    
                     elif tool_name == 'predict_performance':
-                        thinking_placeholder.write("📈 Lancement du modèle de prédiction...")
+                        thinking_placeholder.write("🤖 Je soumets les données à mon modèle de prédiction pour évaluer les risques...")
+
+                    # --- Outils de visualisation (demandés par l'utilisateur) ---
+                    elif tool_name == 'display_price_chart':
+                        ticker = tool_args.get('ticker', 'l\'action')
+                        thinking_placeholder.write(f"📈 Préparation du graphique de l'évolution du prix pour **{ticker.upper()}**...")
+                    
                     elif tool_name == 'create_dynamic_chart':
-                        thinking_placeholder.write("📊 Création de la visualisation demandée...")
+                        metric = tool_args.get('y_column', 'la métrique demandée')
+                        thinking_placeholder.write(f"🎨 Je construis le graphique personnalisé pour visualiser **{metric}**.")
+                        
+                    elif tool_name == 'compare_stocks':
+                        tickers = tool_args.get('tickers', [])
+                        metric = tool_args.get('metric', 'la métrique')
+                        if metric == 'price':
+                             thinking_placeholder.write(f"🚀 Comparaison des performances de **{', '.join(tickers)}**... Je normalise les prix pour un graphique équitable.")
+                        else:
+                             thinking_placeholder.write(f"🔬 Analyse comparative de la métrique **'{metric}'** pour **{', '.join(tickers)}**. Cela peut prendre un moment, je récupère les données pour chaque entreprise.")
 
                 # La réponse finale est la dernière AIMessage SANS appel d'outil
                 if isinstance(last_message, AIMessage) and not last_message.tool_calls:
@@ -166,17 +206,15 @@ if prompt := st.chat_input("Qu'est ce que je peux faire pour toi aujourd'hui ? �
 
             thinking_placeholder.empty()
 
-            # Une fois le stream terminé, on traite la réponse finale
             if final_response:
                 st.session_state.messages.append(final_response)
             else:
-                # Si aucune réponse claire n'est trouvée, on affiche un message par défaut
-                fallback_response = AIMessage(content="Je suis vraiment désolée, j'ai rencontrée une erreur. Vérifie les logs, ou contacte un admin !")
+                fallback_response = AIMessage(content="Désolée, je semble avoir rencontré une erreur en cours de route. Peux-tu réessayer ou reformuler ta demande ?")
                 st.session_state.messages.append(fallback_response)
-
+        
         except Exception as e:
             thinking_placeholder.empty()
-            error_msg = f"Oups ! Une erreur inattendue s'est produite : {e}"
+            error_msg = f"Oups ! Une erreur inattendue et un peu technique s'est produite. Voici le détail pour les curieux : {e}"
             st.error(error_msg)
             st.session_state.messages.append(AIMessage(content=error_msg))
             import traceback

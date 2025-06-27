@@ -32,5 +32,5 @@ def preprocess_financial_data(df: pd.DataFrame) -> pd.DataFrame:
     
     df_processed = df_processed[available_cols].dropna()
 
-    print(f"Preprocessed data (rich version for tools):\n{df_processed.head()}")
+    print(f"Données preprocess :\n{df_processed.head()}")
     return df_processed

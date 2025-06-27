@@ -15,6 +15,9 @@ from src.predict import predict_outperformance as _predict_performance_logic
 from src.fetch_news import fetch_recent_news as _fetch_recent_news_logic
 from src.fetch_profile import fetch_company_profile as _fetch_profile_logic
 from src.fetch_price import fetch_price_history as _fetch_price_history_logic
+from src.compare_fundamentals import compare_fundamental_metrics as _compare_fundamental_metrics_logic
+from src.compare_prices import compare_price_histories as _compare_price_histories_logic
+from src.chart_theme import stella_theme
 
 
 # --- Définition des outils ---
@@ -72,14 +75,20 @@ def _create_dynamic_chart_logic(
         if 'calendarYear' in df.columns:
             df['calendarYear'] = df['calendarYear'].astype(str)
 
+        common_args = {
+            'title': title,
+            'color': color_column,
+            'color_discrete_sequence': stella_theme['colors'] # Appliquer la palette
+        }
+
         if chart_type == 'line':
-            fig = px.line(df, x=x_column, y=y_column, title=title, color=color_column, markers=True)
+            fig = px.line(df, x=x_column, y=y_column, markers=True, **common_args)
         elif chart_type == 'bar':
-            fig = px.bar(df, x=x_column, y=y_column, title=title, color=color_column)
+            fig = px.bar(df, x=x_column, y=y_column, **common_args)
         elif chart_type == 'scatter':
-            fig = px.scatter(df, x=x_column, y=y_column, title=title, color=color_column)
+            fig = px.scatter(df, x=x_column, y=y_column, **common_args)
         elif chart_type == 'pie':
-            fig = px.pie(df, names=x_column, values=y_column, title=title)
+            fig = px.pie(df, names=x_column, values=y_column, title=title, color_discrete_sequence=stella_theme['colors'])
         else:
             return f"Erreur : Le type de graphique '{chart_type}' n'est pas supporté."
 
@@ -148,7 +157,23 @@ def display_price_chart(ticker: str, period_days: int = 252) -> str:
         period_days (int): Le nombre de jours à afficher. 30 pour 1 mois, 90 pour 3 mois, 252 pour 1 an, 1260 pour 5 ans. La valeur par défaut est 252 (1 an).
     """
     return "[Le graphique de prix est prêt à être généré.]"
-    
+
+@tool
+def compare_stocks(tickers: List[str], metric: str, comparison_type: str = 'fundamental'):
+    """
+    Compare plusieurs actions sur une métrique spécifique. Pour une métrique fondamentale,
+    cela montre TOUJOURS l'évolution sur plusieurs années. Pour le prix, cela montre la performance.
+    C'est l'outil principal pour toute demande contenant "compare", "vs", "versus", "par rapport à".
+
+    Args:
+        tickers (List[str]): La liste des tickers à comparer (ex: ['AAPL', 'MSFT', 'GOOGL']).
+        metric (str): La métrique à comparer. 
+                      - Pour les données fondamentales, utilise le nom exact (ex: 'roe', 'marketCap').
+                      - Pour le prix, utilise la valeur 'price'.
+        comparison_type (str): Le type de comparaison. 'fundamental' ou 'price'. Le LLM doit déduire
+                               le type en fonction de la métrique demandée ('price' vs autre chose).
+    """
+    return "[La comparaison est prête à être exécutée par le système.]"
 
 # --- La liste complète des outils disponibles pour l'agent ---
 available_tools = [
@@ -161,6 +186,7 @@ available_tools = [
     display_raw_data,
     display_processed_data,
     create_dynamic_chart,
-    display_price_chart
+    display_price_chart,
+     compare_stocks
     
 ]
