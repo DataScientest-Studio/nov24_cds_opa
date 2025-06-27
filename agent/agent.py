@@ -25,7 +25,8 @@ from tools import (
     _preprocess_data_logic, 
     _predict_performance_logic, 
     _create_dynamic_chart_logic,
-    _fetch_profile_logic
+    _fetch_profile_logic,
+    _fetch_price_history_logic
 )
 
 # --- Initalisation du LLM ---
@@ -47,6 +48,7 @@ llm = ChatOpenAI(
 class AgentState(TypedDict):
     input: str
     ticker: str
+    tickers: List[str]
     company_name: str
     fetched_df_json: str
     processed_df_json: str
@@ -65,11 +67,12 @@ system_prompt = """Ton nom est Stella. Tu es une assistante experte financière.
 2. `fetch_data`: Récupère les données financières fondamentales pour un ticker boursier donné.
 3. `preprocess_data`: Prépare les données financières récupérées pour la prédiction.
 4. `predict_performance`: Prédit la performance d'une action en se basant sur les données prétraitées.
-5. `display_raw_data`: Affiche le tableau de données financières brutes qui ont été initialement récupérées.
-6. `display_processed_data`: Affiche le tableau de données financières traitées et nettoyées, prêtes pour l'analyse.
-7. `create_dynamic_chart`: Crée un graphique interactif basé sur les données financières prétraitées.
-8. `get_stock_news`: Récupère les dernières actualités pour un ticker donné.
-9. `get_company_profile`: Récupère le profil d'une entreprise, incluant des informations clés comme le nom, le secteur, l'industrie, le CEO, etc.
+5. `display_price_chart`: Affiche un graphique de l'évolution du prix (cours) d'une action. A utiliser si on demande "le prix", "le cours", "graphique de l'action", etc. 
+6. `display_raw_data`: Affiche le tableau de données financières brutes qui ont été initialement récupérées.
+7. `display_processed_data`: Affiche le tableau de données financières traitées et nettoyées, prêtes pour l'analyse.
+8. `create_dynamic_chart`: Crée un graphique interactif basé sur les données financières prétraitées.
+9. `get_stock_news`: Récupère les dernières actualités pour un ticker donné.
+10. `get_company_profile`: Récupère le profil d'une entreprise, incluant des informations clés comme le nom, le secteur, l'industrie, le CEO, etc.
 
 Si l'utilisateur te demande comment tu fonctionnes, à quoi tu sers, ou toute autre demande similaire tu n'utiliseras pas d'outils. 
 Tu expliqueras simplement ton rôle et tes fonctionnalités en donnant des exemples de demandes qu'on peut te faire.
@@ -271,6 +274,27 @@ def execute_tool_node(state: AgentState):
                 ticker = tool_args.get("ticker")
                 profile_json = _fetch_profile_logic(ticker=ticker)
                 tool_outputs.append(ToolMessage(tool_call_id=tool_id, content=profile_json))
+            
+            elif tool_name == "display_price_chart":
+                ticker = tool_args.get("ticker")
+                period = tool_args.get("period_days", 252) # Utilise la valeur par défaut si non fournie
+                
+                # On appelle notre logique pour récupérer les données de prix
+                price_df = _fetch_price_history_logic(ticker=ticker, period_days=period)
+                
+                # On crée le graphique directement ici
+                fig = px.line(
+                    price_df, 
+                    x=price_df.index, 
+                    y='close', 
+                    title=f"Historique du cours de {ticker.upper()} sur {period} jours"
+                )
+                fig.update_layout(template="plotly_white", xaxis_title="Date", yaxis_title="Prix de clôture (USD)")
+                
+                # On convertit en JSON et on met à jour l'état
+                chart_json = pio.to_json(fig)
+                current_state_updates["plotly_json"] = chart_json
+                tool_outputs.append(ToolMessage(tool_call_id=tool_id, content="[Graphique de prix créé avec succès.]"))
             
         except Exception as e:
             # Bloc de capture générique pour toutes les autres erreurs
@@ -500,6 +524,8 @@ def router(state: AgentState) -> str:
     # Maintenant, on décide de la suite en fonction de cet outil.
     if tool_name == 'predict_performance':
         return "generate_final_response"
+    elif tool_name == 'display_price_chart':
+        return "prepare_chart_display"
     elif tool_name in ['display_raw_data', 'display_processed_data']:
         return "prepare_data_display"
     elif tool_name == 'create_dynamic_chart':

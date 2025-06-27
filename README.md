@@ -39,11 +39,12 @@ Liste des outils et capacités de l'agent
 2. `fetch_data`: Récupère les données financières fondamentales pour un ticker boursier donné.
 3. `preprocess_data`: Prépare les données financières récupérées pour la prédiction.
 4. `predict_performance`: Prédit la performance d'une action en se basant sur les données prétraitées.
-5. `display_raw_data`: Affiche le tableau de données financières brutes qui ont été initialement récupérées.
-6. `display_processed_data`: Affiche le tableau de données financières traitées et nettoyées, prêtes pour l'analyse.
-7. `create_dynamic_chart`: Crée un graphique interactif basé sur les données financières prétraitées.
-8. `get_stock_news`: Récupère les dernières actualités pour un ticker donné.
-9. `get_company_profile`: Récupère le profil d'une entreprise, incluant des informations clés comme le nom, le secteur, l'industrie, le CEO, etc.
+5. `display_price_chart`: Affiche un graphique de l'évolution du prix (cours) d'une action. 
+6. `display_raw_data`: Affiche le tableau de données financières brutes qui ont été initialement récupérées.
+7. `display_processed_data`: Affiche le tableau de données financières traitées et nettoyées, prêtes pour l'analyse.
+8. `create_dynamic_chart`: Crée un graphique interactif basé sur les données financières prétraitées.
+9. `get_stock_news`: Récupère les dernières actualités pour un ticker donné.
+10. `get_company_profile`: Récupère le profil d'une entreprise, incluant des informations clés comme le nom, le secteur, l'industrie, le CEO, etc.
 
 Workflow de l'agent
 ------------
@@ -69,25 +70,28 @@ https://www.anaconda.com/docs/getting-started/miniconda/install
 Obtention des clefs API
 ------------
   
-Il est nécessaire d'obtenir deux clef API pour faire fonctionner l'agent
+Il est nécessaire d'obtenir plusieurs clef API pour faire fonctionner l'agent
   
 **Obtenir une clef API OpenRouter**
+  
 OpenRouter est le fournisseur de LLM utilisé :  
 https://openrouter.ai/settings/keys
   
 **Obtenir une clef API Financial Modeling Prep**
+  
 Financial Modeling Prep est le fournisseur de données financières :  
 https://site.financialmodelingprep.com/developer/docs/dashboard
 
 **Obtenir une clef API sur NewsAPI.org**
-NewsAPI fournit les news liés aux entreprises : 
+  
+NewsAPI fournit les news liés aux entreprises :  
 https://newsapi.org
   
 
 Ajout des variables d'envrionnement 
 ------------
 ### Sur Windows
-Lancer ces 3 lignes de commande
+**PowerShell - Lancer ces 3 lignes de commande en en remplaçant ma_clef_api et nom_de_l'utilisateur**
   
 ```[System.Environment]::SetEnvironmentVariable("OPENROUTER_API_KEY", "ma_clef_api_openrouter", "nom_de_l'utilisateur")```
   
@@ -99,7 +103,7 @@ Lancer ces 3 lignes de commande
 
 ```nano ~/.bashrc```
   
-Ajouter ces trois lignes dans le fichier
+**Ajouter ces trois lignes dans le fichier ma_clef_api à chaque fois**
    
 ```export OPENROUTER_API_KEY="ma_clef_api_openrouter"```
   
@@ -111,7 +115,7 @@ Ajouter ces trois lignes dans le fichier
   
 ```nano ~/.zshrc```
   
-Ajouter ces trois lignes dans le fichier
+**Ajouter ces trois lignes dans le fichier ma_clef_api à chaque fois**
   
 ```export OPENROUTER_API_KEY="ma_clef_api_openrouter"```
   

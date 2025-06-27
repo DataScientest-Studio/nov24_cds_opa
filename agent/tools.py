@@ -5,6 +5,7 @@ import plotly.express as px
 import plotly.io as pio
 from langchain_core.tools import tool
 from io import StringIO
+from typing import List
 
 # --- Import des logiques de src  ---
 from src.search_ticker import search_ticker as _search_ticker_logic
@@ -13,6 +14,8 @@ from src.preprocess import preprocess_financial_data as _preprocess_data_logic
 from src.predict import predict_outperformance as _predict_performance_logic
 from src.fetch_news import fetch_recent_news as _fetch_recent_news_logic
 from src.fetch_profile import fetch_company_profile as _fetch_profile_logic
+from src.fetch_price import fetch_price_history as _fetch_price_history_logic
+
 
 # --- Définition des outils ---
 @tool
@@ -135,6 +138,18 @@ def get_company_profile(ticker: str) -> str:
     """
     return "[Le profil de l'entreprise est prêt à être récupéré par le système.]"
 
+@tool
+def display_price_chart(ticker: str, period_days: int = 252) -> str:
+    """
+    Affiche un graphique de l'évolution du prix (cours) d'une action sur une période.
+    Utilise cet outil lorsque l'utilisateur demande "le prix", "le cours", "le graphique de l'action", "la performance de l'action", ou "l'évolution de l'action".
+    Args:
+        ticker (str): Le ticker de l'action (ex: 'AAPL'). L'agent doit le trouver si besoin.
+        period_days (int): Le nombre de jours à afficher. 30 pour 1 mois, 90 pour 3 mois, 252 pour 1 an, 1260 pour 5 ans. La valeur par défaut est 252 (1 an).
+    """
+    return "[Le graphique de prix est prêt à être généré.]"
+    
+
 # --- La liste complète des outils disponibles pour l'agent ---
 available_tools = [
     search_ticker,
@@ -145,5 +160,7 @@ available_tools = [
     predict_performance,
     display_raw_data,
     display_processed_data,
-    create_dynamic_chart 
+    create_dynamic_chart,
+    display_price_chart
+    
 ]
