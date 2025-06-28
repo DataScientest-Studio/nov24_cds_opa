@@ -48,9 +48,9 @@ Liste des outils et capacités de l'agent
 10. `get_company_profile`: Récupère le profil d'une entreprise, incluant des informations clés comme le nom, le secteur, l'industrie, le CEO, etc.
 11. `compare_stocks`: Compare plusieurs entreprises sur une métrique financière ou sur leur prix.
   
-Workflow de l'agent
+Graph de l'agent
 ------------
-![Workflow de l'agent](agent_workflow.png)
+![Graph de l'agent](agent_workflow.png)
   
 
 Mise en place de l'envrionnement 
@@ -72,7 +72,7 @@ https://www.anaconda.com/docs/getting-started/miniconda/install
 Obtention des clefs API
 ------------
   
-Il est nécessaire d'obtenir plusieurs clef API pour faire fonctionner l'agent
+Il est nécessaire d'obtenir plusieurs clef API pour faire fonctionner l'agent :
   
 **Obtenir une clef API OpenRouter**
   
@@ -89,24 +89,44 @@ https://site.financialmodelingprep.com/developer/docs/dashboard
 NewsAPI fournit les news liés aux entreprises :  
 https://newsapi.org
   
-
+**Obtenir une clef API LangSmith**
+LangSmith permet de tracer l'agent et visualiser ce qu'il se passe dans l'application : 
+https://smith.langchain.com/
+  
 Ajout des variables d'envrionnement 
 ------------
 ### Sur Windows
-**PowerShell - Lancer ces 3 lignes de commande en en remplaçant ma_clef_api et nom_de_l'utilisateur**
+**Lancer ces lignes de commande en remplaçant ma_clef_api_x à chaque fois**
   
-```[System.Environment]::SetEnvironmentVariable("OPENROUTER_API_KEY", "ma_clef_api_openrouter", "nom_de_l'utilisateur")```
+```setx LANGCHAIN_ENDPOINT "https://api.smith.langchain.com"```
   
-```[System.Environment]::SetEnvironmentVariable("FMP_API_KEY", "ma_clef_api_fmp", "nom_de_l'utilisateur")```
+```setx LANGCHAIN_PROJECT "stella"```
   
-```[System.Environment]::SetEnvironmentVariable("NEWS_API_KEY", "ma_clef_api_fmp", "nom_de_l'utilisateur")```
+```setx LANGCHAIN_TRACING_V2 "true"```
+  
+```setx LANGSMITH_API_KEY "ma_clef_api_langsmith"```
+  
+```setx NEWS_API_KEY "ma_clef_newsapi"```
+  
+```setx OPENROUTER_API_KEY "ma_clef_api_openrouter"```
+  
+```setx FMP_API_KEY "ma_clef_api_fmp"```
+  
 
 ### Sur Linux / anciens macOS
 
 ```nano ~/.bashrc```
   
-**Ajouter ces trois lignes dans le fichier en remplaçant ma_clef_api à chaque fois**
+**Ajouter ces lignes dans le fichier en remplaçant ma_clef_api à chaque fois**
    
+```export LANGCHAIN_ENDPOINT="https://api.smith.langchain.com"```
+  
+```export LANGCHAIN_PROJECT="stella"```
+  
+```export LANGCHAIN_TRACING_V2="true"```
+  
+```export LANGSMITH_API_KEY="ma_clef_api_langsmith"```
+  
 ```export OPENROUTER_API_KEY="ma_clef_api_openrouter"```
   
 ```export FMP_API_KEY="ma_clef_api_fmp"```
@@ -117,7 +137,15 @@ Ajout des variables d'envrionnement
   
 ```nano ~/.zshrc```
   
-**Ajouter ces trois lignes dans le fichier en remplaçant ma_clef_api à chaque fois**
+**Ajouter ces lignes dans le fichier en remplaçant ma_clef_api à chaque fois**
+  
+```export LANGCHAIN_ENDPOINT="https://api.smith.langchain.com"```
+  
+```export LANGCHAIN_PROJECT="stella"```
+  
+```export LANGCHAIN_TRACING_V2="true"```
+  
+```export LANGSMITH_API_KEY="ma_clef_api_langsmith"```
   
 ```export OPENROUTER_API_KEY="ma_clef_api_openrouter"```
   
