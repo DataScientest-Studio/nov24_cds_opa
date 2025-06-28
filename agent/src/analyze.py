@@ -8,7 +8,7 @@ import numpy as np # Assurez-vous que numpy est importé
 # Le chemin vers votre modèle
 MODEL_PATH = 'models/rf_fundamental_market_classifier.joblib' 
 
-def predict_outperformance(processed_data: pd.DataFrame) -> str:
+def analyse_risks(processed_data: pd.DataFrame) -> str:
     """
     Analyse les données pour détecter un risque de sous-performance.
     Le modèle est spécialisé pour détecter les signaux négatifs (classe 0).

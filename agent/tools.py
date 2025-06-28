@@ -11,7 +11,7 @@ from typing import List
 from src.search_ticker import search_ticker as _search_ticker_logic
 from src.fetch_data import fetch_fundamental_data as _fetch_data_logic
 from src.preprocess import preprocess_financial_data as _preprocess_data_logic
-from src.predict import predict_outperformance as _predict_performance_logic
+from src.analyze import analyse_risks as _analyze_risks_logic
 from src.fetch_news import fetch_recent_news as _fetch_recent_news_logic
 from src.fetch_profile import fetch_company_profile as _fetch_profile_logic
 from src.fetch_price import fetch_price_history as _fetch_price_history_logic
@@ -46,8 +46,9 @@ def preprocess_data() -> str:
     return "[L'étape de preprocessing est prête à être exécutée.]"
 
 @tool
-def predict_performance() -> str:
-    """Prédit la performance d'une action en se basant sur les données prétraitées."""
+def analyze_risks() -> str:
+    """Prédit la performance d'une action par rapport au marché en se basant sur les données prétraitées.
+    Utilise un modèle de machine learning pour détecter les risques de sous-performance."""
     return "[L'étape de prédiction est prête à être exécutée.]"
 
 @tool
@@ -183,10 +184,10 @@ available_tools = [
     get_stock_news,
     get_company_profile,
     preprocess_data,
-    predict_performance,
+    analyze_risks,
     display_raw_data,
     display_processed_data,
     create_dynamic_chart,
     display_price_chart,
-     compare_stocks
+    compare_stocks
 ]

@@ -23,12 +23,13 @@ Organisation du projet
     │   └── figures                  <- Les graphiques générés lors de la phase d'exploration des données
     │
     ├── agent                        <- Le code source de l'agent analyste 
-    │   ├── app.py                   <- Le fichier streamlit utilisé pour lancer l'agent via 'streamlit run agent/app.py'
+    │   ├── app.py                   <- Le fichier streamlit utilisé pour lancer l'agent 
     │   ├── agent.py                 <- La logique agentique dévéloppée dans le framework LangGraph
     │   ├── tools.py                 <- La fichier référençant les outils disponibles pour l'agent 
     │   ├── agent_workflow.png       <- Visualisation des noeuds et relations du LangGraph de l'agent
     │   │
     │   ├── src                      <- Le dossier contenant les scripts des outils
+    │   ├── pages                    <- Le dossier contenant les différentes pages de l'application 
     │   └── assets                   <- Le dossier contenant les assets nécessaires à l'UI de l'application Streamlit
     
 --------
@@ -38,7 +39,7 @@ Liste des outils et capacités de l'agent
 1. `search_ticker`: Recherche le ticker boursier d'une entreprise à partir de son nom.
 2. `fetch_data`: Récupère les données financières fondamentales pour un ticker boursier donné.
 3. `preprocess_data`: Prépare les données financières récupérées pour la prédiction.
-4. `predict_performance`: Prédit la performance d'une action en se basant sur les données prétraitées.
+4. `analyze_risks`: Vérifie des signaux négatifs extrêmes se trouvent dans les données prétraitées.
 5. `display_price_chart`: Affiche un graphique de l'évolution du prix (cours) d'une action. 
 6. `display_raw_data`: Affiche le tableau de données financières brutes qui ont été initialement récupérées.
 7. `display_processed_data`: Affiche le tableau de données financières traitées et nettoyées, prêtes pour l'analyse.

@@ -14,6 +14,7 @@ import textwrap
 import plotly.express as px
 import plotly.io as pio
 import plotly.graph_objects as go
+import graphviz
 
 # Numéro de session unique
 import uuid
@@ -28,6 +29,7 @@ from langchain_core.messages import HumanMessage, AIMessage, BaseMessage, ToolMe
 from langgraph.graph import StateGraph, END
 from langgraph.graph.message import AnyMessage, add_messages
 from langgraph.checkpoint.memory import MemorySaver
+from langsmith import Client
 
 # --- Import des tools ---
 from tools import (
@@ -36,7 +38,7 @@ from tools import (
     _search_ticker_logic,
     _fetch_data_logic, 
     _preprocess_data_logic, 
-    _predict_performance_logic, 
+    _analyze_risks_logic, 
     _create_dynamic_chart_logic,
     _fetch_profile_logic,
     _fetch_price_history_logic,
@@ -44,10 +46,14 @@ from tools import (
     _compare_price_histories_logic
 )
 
-# --- Initalisation du LLM ---
+# --- Initalisation du LLM et tracing---
 OPENROUTER_API_BASE = "https://openrouter.ai/api/v1"
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY") 
 OPENROUTER_MODEL = "deepseek/deepseek-chat-v3-0324:free"
+LANGSMITH_TRACING=True
+LANGSMITH_ENDPOINT="https://api.smith.langchain.com"
+LANGSMITH_API_KEY=os.getenv("LANGSMITH_API_KEY")
+LANGSMITH_PROJECT="stella"
 
 if not OPENROUTER_API_KEY:
     raise ValueError("OPENROUTER_API_KEY n'a pas été enregistrée comme variable d'environnement.")
@@ -67,7 +73,7 @@ class AgentState(TypedDict):
     company_name: str
     fetched_df_json: str
     processed_df_json: str
-    prediction: str
+    analysis: str
     plotly_json: str  
     messages: Annotated[List[AnyMessage], add_messages]
     error: str
@@ -86,7 +92,7 @@ Ne recommence jamais une analyse de zéro si ce n'est pas explicitement demandé
 1. `search_ticker`: Recherche le ticker boursier d'une entreprise à partir de son nom.
 2. `fetch_data`: Récupère les données financières fondamentales pour un ticker boursier donné.
 3. `preprocess_data`: Prépare et nettoie les données financières récupérées pour la prédiction. A utiliser si on demande les données nettoyées, pré-traitées, etc...
-4. `predict_performance`: Prédit la performance d'une action en se basant sur les données prétraitées.
+4. `analyze_risks`: Prédit la performance d'une action par rapport au marché en se basant sur les données prétraitées. Ne prend en compte que les signaux négatifs extrêmes(risques de sous-performance).
 5. `display_price_chart`: Affiche un graphique de l'évolution du prix (cours) d'une action. A utiliser si on demande "le prix", "le cours", "graphique de l'action", etc. 
 6. `display_raw_data`: Affiche le tableau de données financières brutes qui ont été initialement récupérées.
 7. `display_processed_data`: Affiche le tableau de données financières traitées et nettoyées, prêtes pour l'analyse.
@@ -103,8 +109,8 @@ Quand un utilisateur te demande une analyse complète, tu DOIS suivre cette séq
 1. `search_ticker` si le nom de l'entreprise est donné plutôt que le ticker.
 2. `fetch_data` avec le ticker demandé.
 2. `preprocess_data` pour nettoyer les données.
-3. `predict_performance` pour obtenir un verdict.
-Ta tâche est considérée comme terminée après l'appel à `predict_performance`. La réponse finale avec le graphique sera générée automatiquement.
+3. `analyze_risks` pour obtenir un verdict.
+Ta tâche est considérée comme terminée après l'appel à `analyze_risks`. La réponse finale avec le graphique sera générée automatiquement.
 
 **IDENTIFICATION DU TICKER** 
 Si l'utilisateur donne un nom de société (comme 'Apple' ou 'Microsoft') au lieu d'un ticker (comme 'AAPL' ou 'MSFT'), 
@@ -127,8 +133,8 @@ L'outil `create_dynamic_chart` ne fonctionnera QUE si tu respectes les règles s
 5.  Si les données ne sont pas encore disponibles, appelle d'abord `fetch_data`.
 
 **Logique de Prédiction :**
-- Si `predict_performance` renvoie "Risque Élevé Détecté", présente cela comme un avertissement clair.
-- Si `predict_performance` renvoie "Aucun Risque Extrême Détecté", explique que cela n'est PAS une recommandation d'achat, mais simplement l'absence de signaux de danger majeurs.
+- Si `analyze_risks` renvoie "Risque Élevé Détecté", présente cela comme un avertissement clair.
+- Si `analyze_risks` renvoie "Aucun Risque Extrême Détecté", explique que cela n'est PAS une recommandation d'achat, mais simplement l'absence de signaux de danger majeurs.
 
 **Actualités :**
 Si l'utilisateur demande "les nouvelles", "les actualités" ou "ce qui se passe" pour une entreprise, utilise l'outil `get_stock_news`. 
@@ -268,21 +274,13 @@ def execute_tool_node(state: AgentState):
                 current_state_updates["processed_df_json"] = output.to_json(orient='split')
                 tool_outputs.append(ToolMessage(tool_call_id=tool_id, content="[Données prétraitées avec succès.]"))
 
-            elif tool_name == "predict_performance":
+            elif tool_name == "analyze_risks":
                 if not state.get("processed_df_json"):
                     raise ValueError("Impossible de faire une prédiction car les données n'ont pas encore été prétraitées.")
                 processed_df = pd.read_json(StringIO(state["processed_df_json"]), orient='split')
-                output = _predict_performance_logic(processed_data=processed_df)
-                current_state_updates["prediction"] = output
+                output = _analyze_risks_logic(processed_data=processed_df)
+                current_state_updates["analysis"] = output
                 tool_outputs.append(ToolMessage(tool_call_id=tool_id, content=output))
-
-            elif tool_name == "visualize_data":
-                if not state.get("fetched_df_json") or not state.get("prediction"):
-                     raise ValueError("Données ou prédiction manquantes pour la visualisation.")
-                fetched_df = pd.read_json(StringIO(state["fetched_df_json"]), orient='split')
-                output = _visualize_data_logic(data=fetched_df, prediction=state["prediction"], ticker=state["ticker"])
-                current_state_updates["image_base64"] = output
-                tool_outputs.append(ToolMessage(tool_call_id=tool_id, content="[Image générée avec succès.]"))
             
             elif tool_name == "create_dynamic_chart":
                 data_json_for_chart = state.get("processed_df_json") or state.get("fetched_df_json")
@@ -331,7 +329,7 @@ def execute_tool_node(state: AgentState):
                     x=price_df.index, 
                     y='close', 
                     title=f"Historique du cours de {ticker.upper()} sur {period} jours",
-                    color_discrete_map=stella_theme['metric_colors']
+                    color_discrete_sequence=stella_theme['colors']
 
                 )
                 fig.update_layout(template=stella_theme['template'], font=stella_theme['font'], xaxis_title="Date", yaxis_title="Prix de clôture (USD)")
@@ -398,7 +396,7 @@ def generate_final_response_node(state: AgentState):
     
     # --- 1. Récupération des informations de l'état ---
     ticker = state.get("ticker", "l'action")
-    prediction_result = state.get("prediction", "inconnu")
+    analysis_result = state.get("analysis", "inconnu")
     processed_df_json = state.get("processed_df_json")
 
     # --- 2. Construction de la réponse textuelle ---
@@ -416,12 +414,12 @@ def generate_final_response_node(state: AgentState):
             print(f"Avertissement : Impossible d'extraire l'année des données : {e}")
 
     # Logique de la réponse textuelle basée sur la prédiction
-    if prediction_result == "Risque Élevé Détecté":
+    if analysis_result == "Risque Élevé Détecté":
         response_content = (
             f"⚠️ **Attention !** Pour l'action **{ticker.upper()}**, en se basant sur les données de **{latest_year_str} (dernières données disponibles)**, mon analyse a détecté des signaux indiquant un **risque élevé de sous-performance pour l'année à venir ({next_year_str})**.\n\n"
             "Mon modèle est particulièrement confiant dans cette évaluation. Je te conseille la plus grande prudence."
         )
-    elif prediction_result == "Aucun Risque Extrême Détecté":
+    elif analysis_result == "Aucun Risque Extrême Détecté":
         response_content = (
             f"Pour l'action **{ticker.upper()}**, en se basant sur les données de **{latest_year_str}** (dernières données disponibles), mon analyse n'a **pas détecté de signaux de danger extrême pour l'année à venir ({next_year_str})**.\n\n"
             "**Important :** Cela ne signifie pas que c'est un bon investissement. Cela veut simplement dire que mon modèle, spécialisé dans la détection de signaux très négatifs, n'en a pas trouvé ici. Mon rôle est de t'aider à éviter une erreur évidente, pas de te garantir un succès."
@@ -521,8 +519,8 @@ def generate_final_response_node(state: AgentState):
 
                     Ce graphique croise deux questions clés : "L'entreprise grandit-elle ?" et "Quel prix le marché paie-t-il pour cette croissance ?".
 
-                    *   🟠 **La ligne orange (Croissance)** : Elle montre la tendance de la croissance du chiffre d'affaires. Une courbe ascendante indique une accélération.
-                    *   🟣 **La ligne violette (Valorisation)** : Elle représente le rendement des bénéfices (l'inverse du fameux P/E Ratio). **Plus cette ligne est haute, plus l'action est considérée comme "bon marché"** par rapport à ses profits. Une ligne basse indique une action "chère".
+                    *   🟣 **La ligne violette (Croissance)** : Elle montre la tendance de la croissance du chiffre d'affaires. Une courbe ascendante indique une accélération.
+                    *   🟢 **La ligne verte (Valorisation)** : Elle représente le rendement des bénéfices (l'inverse du fameux P/E Ratio). **Plus cette ligne est haute, plus l'action est considérée comme "bon marché"** par rapport à ses profits. Une ligne basse indique une action "chère".
 
                     **L'analyse clé :** Idéalement, on recherche une croissance qui accélère (ligne orange qui monte) avec une valorisation qui reste raisonnable (ligne violette stable ou qui monte). Une croissance qui ralentit (ligne orange qui plonge) alors que l'action devient plus chère (ligne violette qui plonge) est souvent un signal de prudence.
                 """)
@@ -556,7 +554,7 @@ def cleanup_state_node(state: AgentState):
     # On garde : 'ticker', 'tickers', 'company_name', 'fetched_df_json', 'processed_df_json'
     # On supprime (réinitialise) :
     return {
-        "prediction": "",   # Efface la prédiction précédente
+        "analysis": "",   # Efface la prédiction précédente
         "plotly_json": "",  # Efface le graphique précédent
         "error": ""         # Efface toute erreur précédente
     }
@@ -693,7 +691,7 @@ def router(state: AgentState) -> str:
     print(f"--- ROUTEUR: Le dernier outil appelé était '{tool_name}'. ---")
 
     # Maintenant, on décide de la suite en fonction de cet outil.
-    if tool_name == 'predict_performance':
+    if tool_name == 'analyze_risks':
         return "generate_final_response"
     elif tool_name == 'compare_stocks': 
         return "prepare_chart_display"
@@ -763,6 +761,135 @@ try:
 
 except Exception as e:
     print(f"\nJe n'ai pas pu générer la visualisation. Lancez 'pip install playwright' et 'playwright install'. Erreur: {e}\n")
+
+# --- Crée une animation du workflow ---
+def generate_trace_animation_frames(thread_id: str):
+    """
+    Récupère une trace LangSmith et génère une série d'images Graphviz au style moderne.
+    """
+    print(f"--- VISUALIZER: Génération de l'animation pour : {thread_id} ---")
+    try:
+        # --- 1. DÉFINITION DU THÈME MODERNE ---
+        style_config = {
+            "graph": {
+                "fontname": "Arial",
+                "bgcolor": "transparent", # Fond transparent
+                "rankdir": "TB", # Top-to-Bottom layout
+            },
+            "nodes": {
+                "fontname": "Arial",
+                "shape": "box", # Forme rectangulaire
+                "style": "rounded,filled", # Bords arrondis et remplis
+                "fillcolor": "#1C202D", # Couleur de fond des noeuds (thème sombre)
+                "color": "#FAFAFA", # Couleur de la bordure
+                "fontcolor": "#FAFAFA", # Couleur du texte
+            },
+            "edges": {
+                "color": "#6c757d", # Couleur gris doux pour les flèches
+                "arrowsize": "0.8",
+            },
+            "highlight": {
+                "fillcolor": "#33FFBD", # Couleur orange pour le noeud actif (de chart_theme.py)
+                "color": "#33FFBD", # Bordure blanche pour le noeud actif
+                "edge_color": "#33FFBD", # Couleur orange pour la flèche active
+            }
+        }
+
+        client = Client()
+        all_runs = list(client.list_runs(
+            project_name=os.environ.get("LANGCHAIN_PROJECT", "stella"),
+            thread_id=thread_id,
+        ))
+
+        if not all_runs:
+            print("--- VISUALIZER: Aucune exécution trouvée pour cet ID de thread.")
+            return []
+
+        thread_run = next((r for r in all_runs if not r.parent_run_id), None)
+        if not thread_run:
+            print("--- VISUALIZER: Exécution principale du thread introuvable.")
+            return []
+
+        trace_nodes_runs = sorted(
+            [r for r in all_runs if r.parent_run_id == thread_run.id],
+            key=lambda r: r.start_time
+        )
+
+        trace_node_names = [run.name for run in trace_nodes_runs]
+        full_trace_path = ["__start__"] + trace_node_names + ["__end__"]
+
+        if not trace_node_names:
+            print("--- VISUALIZER: Aucun noeud enfant (étape) trouvé dans la trace.")
+            return []
+
+        print(f"--- VISUALIZER: Chemin d'exécution trouvé : {' -> '.join(full_trace_path)}")
+
+        graph_json = app.get_graph().to_json()
+        
+        frames = []
+        previous_node = full_trace_path[0]
+        initial_node_name = full_trace_path[0]
+
+        for i, node_name in enumerate(full_trace_path):
+            # --- 2. CONSTRUCTION DU DOT STRING AVEC STYLE ---
+            
+            # Attributs globaux pour le graphe
+            graph_attrs = ' '.join([f'{k}="{v}"' for k, v in style_config["graph"].items()])
+            node_attrs = ' '.join([f'{k}="{v}"' for k, v in style_config["nodes"].items()])
+            edge_attrs = ' '.join([f'{k}="{v}"' for k, v in style_config["edges"].items()])
+
+            dot_lines = [
+                "digraph {",
+                f"  graph [{graph_attrs}];",
+                f"  node [{node_attrs}];",
+                f"  edge [{edge_attrs}];",
+            ]
+            
+            # Ajout des noeuds
+            for node in graph_json["nodes"]:
+                node_id = node["id"]
+                label = node["data"]["name"] if "data" in node and "name" in node["data"] else node_id
+                
+                # Appliquer le style de surbrillance si c'est le noeud actif
+                if node_id == node_name:
+                    highlight_attrs = ' '.join([f'{k}="{v}"' for k, v in style_config["highlight"].items() if 'edge' not in k])
+                    dot_lines.append(f'  "{node_id}" [label="{label}", {highlight_attrs}];')
+                else:
+                    dot_lines.append(f'  "{node_id}" [label="{label}"];')
+            
+            # Ajout des arêtes
+            for edge in graph_json["edges"]:
+                source = edge["source"]
+                target = edge["target"]
+                
+                # Appliquer le style de surbrillance si c'est l'arête active
+                if source == previous_node and target == node_name:
+                    dot_lines.append(f'  "{source}" -> "{target}" [color="{style_config["highlight"]["edge_color"]}", penwidth=2.5];')
+                else:
+                    dot_lines.append(f'  "{source}" -> "{target}";')
+            
+            dot_lines.append("}")
+            modified_dot = "\n".join(dot_lines)
+            
+            g = graphviz.Source(modified_dot)
+            png_bytes = g.pipe(format='png')
+
+            step_description = f"Step {i+1}: Transition vers le noeud '{node_name}'"
+            if i == 0:
+                step_description = "Step 1: Début de l'exécution"
+            elif i == len(full_trace_path) - 1:
+                step_description = f"Step {i+1}: Fin de l'exécution"
+            frames.append((step_description, png_bytes))
+
+            previous_node = node_name
+
+        return frames
+
+    except Exception as e:
+        print(f"--- VISUALIZER: Erreur lors de la génération des frames: {e}")
+        import traceback
+        traceback.print_exc()
+        return []
 
 # --- Bloc test main ---
 if __name__ == '__main__':

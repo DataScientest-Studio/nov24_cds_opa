@@ -4,13 +4,15 @@
 stella_theme = {
 
     'colors': [
-        '#9467bd',  # Violet Doux
-        '#ff7f0e',  # Orange Vif
-        '#2ca02c',  # Vert Succès
-        '#d62728',  # Rouge Avertissement
-        '#1f77b4',  # Bleu Stella (Bleu moyen)
-        '#8c564b',  # Marron Terre
-        '#e377c2',  # Rose
+        '#33FFBD', 
+        '#C9B1FF',
+        '#FFB81C',
+        '#8c564b', 
+        '#2ca02c',  
+        '#1f77b4',  
+        '#e377c2',  
+        '#d62728',  
+        '#ff7f0e',  
     ],
 
     # Des couleurs spécifiques pour certaines métriques clés.
