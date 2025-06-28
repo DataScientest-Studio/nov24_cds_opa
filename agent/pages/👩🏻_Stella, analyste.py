@@ -165,16 +165,16 @@ if prompt := st.chat_input("Qu'est ce que je peux faire pour toi aujourd'hui ? �
                     
                     elif tool_name == 'get_company_profile':
                         ticker = tool_args.get('ticker', 'l\'action')
-                        thinking_placeholder.write(f"ℹ️ D'accord, je rassemble les informations générales (secteur, activité...) pour **{ticker.upper()}**.")
+                        thinking_placeholder.write(f"ℹ️ D'accord, je rassemble les informations générales (secteur, activité...) pour `{ticker.upper()}`.")
                     
                     # --- Outils de récupération de données ---
                     elif tool_name == 'fetch_data':
                         ticker = tool_args.get('ticker', 'l\'action')
-                        thinking_placeholder.write(f"📊 Je récupère maintenant les données fondamentales pour **{ticker.upper()}**. Un instant...")
+                        thinking_placeholder.write(f"📊 Je récupère maintenant les données fondamentales pour `{ticker.upper()}`. Un instant...")
                         
                     elif tool_name == 'get_stock_news':
                         ticker = tool_args.get('ticker', 'l\'action')
-                        thinking_placeholder.write(f"📰 Je consulte les dernières news pour voir ce qui se dit sur **{ticker.upper()}**.")
+                        thinking_placeholder.write(f"📰 Je consulte les dernières news pour voir ce qui se dit sur `{ticker.upper()}`.")
 
                     # --- Outils d'analyse complète ---
                     elif tool_name == 'preprocess_data':
@@ -186,19 +186,19 @@ if prompt := st.chat_input("Qu'est ce que je peux faire pour toi aujourd'hui ? �
                     # --- Outils de visualisation (demandés par l'utilisateur) ---
                     elif tool_name == 'display_price_chart':
                         ticker = tool_args.get('ticker', 'l\'action')
-                        thinking_placeholder.write(f"📈 Préparation du graphique de l'évolution du prix pour **{ticker.upper()}**...")
+                        thinking_placeholder.write(f"📈 Préparation du graphique de l'évolution du prix pour `{ticker.upper()}`...")
                     
                     elif tool_name == 'create_dynamic_chart':
                         metric = tool_args.get('y_column', 'la métrique demandée')
-                        thinking_placeholder.write(f"🎨 Je construis le graphique personnalisé pour visualiser **{metric}**.")
+                        thinking_placeholder.write(f"🎨 Je construis le graphique personnalisé pour visualiser `{ticker.upper()}`.")
                         
                     elif tool_name == 'compare_stocks':
                         tickers = tool_args.get('tickers', [])
                         metric = tool_args.get('metric', 'la métrique')
                         if metric == 'price':
-                             thinking_placeholder.write(f"🚀 Comparaison des performances de **{', '.join(tickers)}**... Je normalise les prix pour un graphique équitable.")
+                             thinking_placeholder.write(f"🚀 Comparaison des performances de `{', '.join(tickers)}`... Je normalise les prix pour un graphique équitable.")
                         else:
-                             thinking_placeholder.write(f"🔬 Analyse comparative de la métrique **'{metric}'** pour **{', '.join(tickers)}**. Cela peut prendre un moment, je récupère les données pour chaque entreprise.")
+                             thinking_placeholder.write(f"🔬 Analyse comparative de la métrique **'{metric}'** pour `{', '.join(tickers)}`. Cela peut prendre un moment, je récupère les données pour chaque entreprise.")
 
                 # La réponse finale est la dernière AIMessage SANS appel d'outil
                 if isinstance(last_message, AIMessage) and not last_message.tool_calls:

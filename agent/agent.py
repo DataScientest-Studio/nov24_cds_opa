@@ -161,6 +161,10 @@ Quand l'utilisateur demande de comparer plusieurs entreprises (ex: "compare le R
 
 *   **Pour le NASDAQ 100**: Utilise le ticker de l'ETF `QQQ`. Pour le S&P 500, utilise `SPY`. Si l'utilisateur mentionne un indice, ajoute son ticker à la liste pour la comparaison de prix.
 
+**Note sur les actions internationales**: Pour les graphiques de prix des actions européennes ou asiatiques, je fonctionne mieux si tu me donnes le ticker complet avec son suffixe de marché (ex: "AIR.PA" pour Airbus, "005930.KS" pour Samsung). 
+L'analyse fondamentale complète reste limitée aux actions américaines.
+
+Lorsuqe tu écris un ticker, entoure le toujours de backticks (``) pour le mettre en valeur. (ex: `AAPL`).
 Tu dois toujours répondre en français et tutoyer ton interlocuteur.
 """
 # --- Définition des noeuds du Graph ---
@@ -232,7 +236,7 @@ def execute_tool_node(state: AgentState):
                 # On stocke le ticker ET le nom de l'entreprise
                 current_state_updates["ticker"] = ticker
                 current_state_updates["company_name"] = company_name 
-                tool_outputs.append(ToolMessage(tool_call_id=tool_id, content=f"[Ticker '{ticker}' trouvé.]"))
+                tool_outputs.append(ToolMessage(tool_call_id=tool_id, content=f"[Ticker `{ticker}` trouvé.]"))
 
             elif tool_name == "fetch_data":
                 try:
@@ -416,12 +420,12 @@ def generate_final_response_node(state: AgentState):
     # Logique de la réponse textuelle basée sur la prédiction
     if analysis_result == "Risque Élevé Détecté":
         response_content = (
-            f"⚠️ **Attention !** Pour l'action **{ticker.upper()}**, en se basant sur les données de **{latest_year_str} (dernières données disponibles)**, mon analyse a détecté des signaux indiquant un **risque élevé de sous-performance pour l'année à venir ({next_year_str})**.\n\n"
+            f"⚠️ **Attention !** Pour l'action `{ticker.upper()}`, en se basant sur les données de `{latest_year_str}` (dernières données disponibles), mon analyse a détecté des signaux indiquant un **risque élevé de sous-performance pour l'année à venir (`{next_year_str}`)**.\n\n"
             "Mon modèle est particulièrement confiant dans cette évaluation. Je te conseille la plus grande prudence."
         )
     elif analysis_result == "Aucun Risque Extrême Détecté":
         response_content = (
-            f"Pour l'action **{ticker.upper()}**, en se basant sur les données de **{latest_year_str}** (dernières données disponibles), mon analyse n'a **pas détecté de signaux de danger extrême pour l'année à venir ({next_year_str})**.\n\n"
+            f"Pour l'action `{ticker.upper()}`, en se basant sur les données de `{latest_year_str}` (dernières données disponibles), mon analyse n'a **pas détecté de signaux de danger extrême pour l'année à venir (`{next_year_str}`)**.\n\n"
             "**Important :** Cela ne signifie pas que c'est un bon investissement. Cela veut simplement dire que mon modèle, spécialisé dans la détection de signaux très négatifs, n'en a pas trouvé ici. Mon rôle est de t'aider à éviter une erreur évidente, pas de te garantir un succès."
         )
     else:
@@ -466,7 +470,7 @@ def generate_final_response_node(state: AgentState):
                 ))
                 
                 # Ajouter une ligne à zéro pour mieux visualiser la croissance positive/négative
-                fig.add_hline(y=0, line_width=1, line_dash="dash", line_color="white", yref="y1")
+                fig.add_hline(y=0, line_width=1, line_dash="dash", line_color="black", yref="y1")
 
                 # 3. Configurer les axes et le layout
                 fig.update_layout(

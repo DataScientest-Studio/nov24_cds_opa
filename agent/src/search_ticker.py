@@ -27,7 +27,7 @@ def search_ticker(company_name: str) -> str:
             raise APILimitError(f"Désolé, je n'ai trouvé aucune entreprise correspondant à '{company_name}'.")
         
         # On définit des listes de priorité pour les bourses et les devises
-        preferred_exchanges = ["PAR", "NYSE", "NASDAQ"]
+        preferred_exchanges = ["PAR", "KS", "NYSE", "NASDAQ"]
         preferred_currency = "USD"
         
         best_ticker = None
@@ -53,7 +53,6 @@ def search_ticker(company_name: str) -> str:
             print(f"Aucun match prioritaire trouvé. Utilisation du premier résultat : {best_ticker['symbol']}")
 
         final_ticker = best_ticker.get('symbol')
-        final_ticker = final_ticker.split('.')[0]  # On retire la partie après le point si elle existe (ex: 'AIR.PA' -> 'AIR')
         found_name = best_ticker.get('name')
 
         print(f"Ticker sélectionné pour '{company_name}': {final_ticker} ({found_name})")
