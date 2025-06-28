@@ -17,7 +17,7 @@ st.markdown("Visualisez pas à pas le chemin de décision de la dernière conver
 
 # Vérifier si une conversation a déjà eu lieu
 if 'last_run_id' not in st.session_state:
-    st.info("👋 Pour commencer, veuillez avoir une conversation avec l'agent sur la page principale 'app'.")
+    st.info("👋 Pour commencer, veuillez avoir une conversation avec l'agent sur la page principale '👩🏻 Stella, analyste'.")
     st.stop()
 
 # --- Interface de contrôle de l'animation ---

@@ -30,7 +30,9 @@ Organisation du projet
     │   │
     │   ├── src                      <- Le dossier contenant les scripts des outils
     │   ├── pages                    <- Le dossier contenant les différentes pages de l'application 
-    │   └── assets                   <- Le dossier contenant les assets nécessaires à l'UI de l'application Streamlit
+    │   ├── assets                   <- Le dossier contenant les assets nécessaires à l'UI de l'application 
+    │   └── .streamlit               <- Le dossier contenant les fichiers de configuration pour Streamlit
+
     
 --------
 
