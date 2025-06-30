@@ -189,6 +189,7 @@ if prompt := st.chat_input("Qu'est ce que je peux faire pour toi aujourd'hui ? �
                         thinking_placeholder.write(f"📈 Préparation du graphique de l'évolution du prix pour `{ticker.upper()}`...")
                     
                     elif tool_name == 'create_dynamic_chart':
+                        ticker = tool_args.get('ticker', 'l\'action')
                         metric = tool_args.get('y_column', 'la métrique demandée')
                         thinking_placeholder.write(f"🎨 Je construis le graphique personnalisé pour visualiser `{ticker.upper()}`.")
                         
