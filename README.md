@@ -62,7 +62,8 @@ Mise en place de l'environnement
 python3 -m venv stella
 source stella/bin/activate
 pip install -r requirements.txt
-playwright install```
+playwright install
+```
   
 
 Obtention des clefs API
