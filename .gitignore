@@ -164,4 +164,4 @@ cython_debug/
 
 # Data folder
 data/
-.env 
+.env # Ignore environment variables file
