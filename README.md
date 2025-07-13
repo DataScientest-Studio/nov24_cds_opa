@@ -55,20 +55,14 @@ Graph de l'agent
 ![Graph de l'agent](agent_workflow.png)
   
 
-Mise en place de l'envrionnement 
+Mise en place de l'environnement 
 ------------
   
-**Installer Miniconda**
-  
-https://www.anaconda.com/docs/getting-started/miniconda/install
-
-**Vérfier l'installation**
-  
-```conda --version```
-
-**Pour créer l'environnement de l'agent contenant les dépendances**
-  
-```conda env create -f environment.yml```
+```bash
+python3 -m venv stella
+source stella/bin/activate
+pip install -r requirements.txt
+playwright install```
   
 
 Obtention des clefs API
