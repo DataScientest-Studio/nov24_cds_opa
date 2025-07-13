@@ -92,55 +92,12 @@ https://smith.langchain.com/
   
 Ajout des variables d'envrionnement 
 ------------
-### Sur Windows
-**Lancer ces lignes de commande en remplaçant ma_clef_api_x à chaque fois**
-  
-```bash
-setx LANGCHAIN_ENDPOINT "https://api.smith.langchain.com"```
-setx LANGCHAIN_PROJECT "stella"
-setx LANGCHAIN_TRACING_V2 "true"
-setx LANGSMITH_API_KEY "ma_clef_api_langsmith"
-setx NEWS_API_KEY "ma_clef_newsapi"
-setx OPENROUTER_API_KEY "ma_clef_api_openrouter"
-setx FMP_API_KEY "ma_clef_api_fmp"
-```
-  
-
-### Sur Linux / anciens macOS
 
 ```bash
-nano ~/.bashrc
-```
-  
-**Ajouter ces lignes dans le fichier en remplaçant ma_clef_api à chaque fois**
-   
-```bash
-export LANGCHAIN_ENDPOINT="https://api.smith.langchain.com"
-export LANGCHAIN_PROJECT="stella"
-export LANGCHAIN_TRACING_V2="true"
-export LANGSMITH_API_KEY="ma_clef_api_langsmith"
-export OPENROUTER_API_KEY="ma_clef_api_openrouter"
-export FMP_API_KEY="ma_clef_api_fmp"
-export NEWS_API_KEY="ma_clef_newsapi"
+touch .env
 ```
 
-### Sur macOS (récent)
-  
-```bash
-nano ~/.zshrc
-```
-  
-**Ajouter ces lignes dans le fichier en remplaçant ma_clef_api à chaque fois**
-
-```bash
-export LANGCHAIN_ENDPOINT="https://api.smith.langchain.com"
-export LANGCHAIN_PROJECT="stella"
-export LANGCHAIN_TRACING_V2="true"
-export LANGSMITH_API_KEY="ma_clef_api_langsmith"
-export OPENROUTER_API_KEY="ma_clef_api_openrouter"
-export FMP_API_KEY="ma_clef_api_fmp"
-export NEWS_API_KEY="ma_clef_newsapi"
-```
+**Remplissez ensuite le fichier .env en suivant le .env.example présent à la racine**
 
 Lancement de l'agent
 ------------

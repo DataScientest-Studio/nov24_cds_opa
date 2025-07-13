@@ -1,6 +1,9 @@
 # --- Interface Web ---
 streamlit
 
+# --- Gestion des Clés API ---
+python-dotenv  # Pour charger les variables d'environnement depuis .env
+
 # --- Manipulation et Analyse de Données ---
 pandas
 scikit-learn  # Pour joblib et les modèles de machine learning

@@ -1,4 +1,6 @@
 # agent.py
+from dotenv import load_dotenv
+load_dotenv()
 
 # Variables d'environnement
 import os
@@ -30,6 +32,7 @@ from langgraph.graph import StateGraph, END
 from langgraph.graph.message import AnyMessage, add_messages
 from langgraph.checkpoint.memory import MemorySaver
 from langsmith import Client
+
 
 # --- Import des tools ---
 from tools import (
