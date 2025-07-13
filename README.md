@@ -108,6 +108,6 @@ Lancement de l'agent
 
 **Lancer l'application Streamlit**
   
-```streamlit run agent/app.y```
+```streamlit run agent/app.py```
 
 
