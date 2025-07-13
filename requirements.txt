@@ -1,0 +1,22 @@
+# --- Interface Web ---
+streamlit
+
+# --- Manipulation et Analyse de Données ---
+pandas
+scikit-learn  # Pour joblib et les modèles de machine learning
+numpy
+yfinance      # Pour récupérer les historiques de prix
+
+# --- Communication API ---
+requests
+
+# --- Ecosystème LangChain & LangGraph ---
+langchain-openai  # Pour l'intégration avec les modèles (via OpenRouter ici)
+langgraph         # Pour construire l'agent stateful
+langsmith         # Pour le tracing et la visualisation
+langchain-core
+
+# --- Visualisation ---
+plotly        # Pour tous les graphiques interactifs
+graphviz      # Pour la génération du diagramme du workflow de l'agent
+playwright    # Dépendance pour la génération d'image par langgraph

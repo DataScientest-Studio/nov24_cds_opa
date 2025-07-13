@@ -11,7 +11,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from agent import generate_trace_animation_frames
 
 # Configuration de la page
-st.set_page_config(layout="wide", page_title="Agent Run Animator")
+st.set_page_config(layout="wide", page_title="Visualisation de l'agent")
 st.title("🎬 Visualisation de l'agent")
 st.markdown("Visualisez pas à pas le chemin de décision de la dernière conversation avec l'agent.")
 

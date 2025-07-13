@@ -79,8 +79,6 @@ class AgentState(TypedDict):
     error: str
 
 # --- Prompt système (définition du rôle de l'agent) ---
-# agent.py
-
 system_prompt = """Ton nom est Stella. Tu es une assistante experte financière. Ton but principal est d'aider les utilisateurs en analysant des actions.
 
 **Règle d'Or : Le Contexte est Roi**
@@ -169,7 +167,7 @@ Tu dois toujours répondre en français et tutoyer ton interlocuteur.
 """
 # --- Définition des noeuds du Graph ---
 
-# Noeud 1 : agent_node, point d'entrée
+# Noeud 1 : agent_node, point d'entrée et appel du LLM 
 def agent_node(state: AgentState):
     """Le 'cerveau' de l'agent. Décide du prochain outil à appeler."""
     print("\n--- AGENT: Décision de la prochaine étape... ---")

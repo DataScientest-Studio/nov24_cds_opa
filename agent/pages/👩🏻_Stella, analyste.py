@@ -136,7 +136,6 @@ if prompt := st.chat_input("Qu'est ce que je peux faire pour toi aujourd'hui ? �
         st.write(prompt)
 
     with st.chat_message("assistant", avatar=STELLA_AVATAR):
-        # --- DÉBUT DU BLOC AMÉLIORÉ ---
         thinking_placeholder = st.empty()
         thinking_placeholder.write("🧠 Hmm, laisse-moi réfléchir une seconde...")
 
@@ -155,8 +154,6 @@ if prompt := st.chat_input("Qu'est ce que je peux faire pour toi aujourd'hui ? �
                     tool_call = last_message.tool_calls[0] # On se concentre sur le premier appel
                     tool_name = tool_call['name']
                     tool_args = tool_call['args']
-                    
-                    # --- Messages de feedback verbeux et engageants ---
                     
                     # --- Outils de recherche initiaux ---
                     if tool_name == 'search_ticker':
