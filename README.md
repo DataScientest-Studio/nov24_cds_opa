@@ -94,18 +94,18 @@ https://smith.langchain.com/
 Ajout des variables d'envrionnement 
 ------------
 
-```bash
-touch .env
-```
-
-**Remplissez ensuite le fichier .env en suivant le .env.example présent à la racine**
+**Supprimez le .example à la fin de .env.example pour avoir un fichier .env et remplissez le avec les clefs APIs**
 
 Lancement de l'agent
 ------------
   
 **Activer l'envrionnement pour la session en cours**
-  
+
+### Sur Linux / Mac
 ```source stella/bin/activate```
+
+### Sur Windows
+```stella\Scripts\activate```
 
 **Lancer l'application Streamlit**
   
