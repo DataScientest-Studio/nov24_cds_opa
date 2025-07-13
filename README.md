@@ -8,7 +8,7 @@ Organisation du projet
 
     ├── LICENSE
     ├── README.md                    <- Le README décrivant le projet
-    ├── environment.yml              <- Le fichier yml permettant de copier l'environnement conda nécessaire à l'exécution du projet.
+    ├── .env.example                 <- Le fichier décrivant comment remplir les clefs APIs
     │
     ├── notebooks                    <- Tous les notebooks et données utilsés pendant la phase de recherche
     │   ├── csv                      <- Les données utilisées pendant le projet.
@@ -27,6 +27,7 @@ Organisation du projet
     │   ├── agent.py                 <- La logique agentique dévéloppée dans le framework LangGraph
     │   ├── tools.py                 <- La fichier référençant les outils disponibles pour l'agent 
     │   ├── agent_workflow.png       <- Visualisation des noeuds et relations du LangGraph de l'agent
+    │   ├── requirements.txt         <- Le fichier txt permettant d'installer les dépendances
     │   │
     │   ├── src                      <- Le dossier contenant les scripts des outils
     │   ├── pages                    <- Le dossier contenant les différentes pages de l'application 
