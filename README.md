@@ -95,67 +95,59 @@ Ajout des variables d'envrionnement
 ### Sur Windows
 **Lancer ces lignes de commande en remplaçant ma_clef_api_x à chaque fois**
   
-```setx LANGCHAIN_ENDPOINT "https://api.smith.langchain.com"```
-  
-```setx LANGCHAIN_PROJECT "stella"```
-  
-```setx LANGCHAIN_TRACING_V2 "true"```
-  
-```setx LANGSMITH_API_KEY "ma_clef_api_langsmith"```
-  
-```setx NEWS_API_KEY "ma_clef_newsapi"```
-  
-```setx OPENROUTER_API_KEY "ma_clef_api_openrouter"```
-  
-```setx FMP_API_KEY "ma_clef_api_fmp"```
+```bash
+setx LANGCHAIN_ENDPOINT "https://api.smith.langchain.com"```
+setx LANGCHAIN_PROJECT "stella"
+setx LANGCHAIN_TRACING_V2 "true"
+setx LANGSMITH_API_KEY "ma_clef_api_langsmith"
+setx NEWS_API_KEY "ma_clef_newsapi"
+setx OPENROUTER_API_KEY "ma_clef_api_openrouter"
+setx FMP_API_KEY "ma_clef_api_fmp"
+```
   
 
 ### Sur Linux / anciens macOS
 
-```nano ~/.bashrc```
+```bash
+nano ~/.bashrc
+```
   
 **Ajouter ces lignes dans le fichier en remplaçant ma_clef_api à chaque fois**
    
-```export LANGCHAIN_ENDPOINT="https://api.smith.langchain.com"```
-  
-```export LANGCHAIN_PROJECT="stella"```
-  
-```export LANGCHAIN_TRACING_V2="true"```
-  
-```export LANGSMITH_API_KEY="ma_clef_api_langsmith"```
-  
-```export OPENROUTER_API_KEY="ma_clef_api_openrouter"```
-  
-```export FMP_API_KEY="ma_clef_api_fmp"```
-  
-```export NEWS_API_KEY="ma_clef_newsapi"```
+```bash
+export LANGCHAIN_ENDPOINT="https://api.smith.langchain.com"
+export LANGCHAIN_PROJECT="stella"
+export LANGCHAIN_TRACING_V2="true"
+export LANGSMITH_API_KEY="ma_clef_api_langsmith"
+export OPENROUTER_API_KEY="ma_clef_api_openrouter"
+export FMP_API_KEY="ma_clef_api_fmp"
+export NEWS_API_KEY="ma_clef_newsapi"
+```
 
 ### Sur macOS (récent)
   
-```nano ~/.zshrc```
+```bash
+nano ~/.zshrc
+```
   
 **Ajouter ces lignes dans le fichier en remplaçant ma_clef_api à chaque fois**
-  
-```export LANGCHAIN_ENDPOINT="https://api.smith.langchain.com"```
-  
-```export LANGCHAIN_PROJECT="stella"```
-  
-```export LANGCHAIN_TRACING_V2="true"```
-  
-```export LANGSMITH_API_KEY="ma_clef_api_langsmith"```
-  
-```export OPENROUTER_API_KEY="ma_clef_api_openrouter"```
-  
-```export FMP_API_KEY="ma_clef_api_fmp"```
-  
-```export NEWS_API_KEY="ma_clef_newsapi"```
+
+```bash
+export LANGCHAIN_ENDPOINT="https://api.smith.langchain.com"
+export LANGCHAIN_PROJECT="stella"
+export LANGCHAIN_TRACING_V2="true"
+export LANGSMITH_API_KEY="ma_clef_api_langsmith"
+export OPENROUTER_API_KEY="ma_clef_api_openrouter"
+export FMP_API_KEY="ma_clef_api_fmp"
+export NEWS_API_KEY="ma_clef_newsapi"
+```
 
 Lancement de l'agent
 ------------
   
 **Activer l'envrionnement pour la session en cours**
   
-```conda activate stella```
+```source stella/bin/activate```
 
 **Lancer l'application Streamlit**
   
