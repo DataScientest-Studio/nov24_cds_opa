@@ -11,3 +11,4 @@ __pycache__/
 
 # Fichiers d'envrionnement virtuel Python
 venv/
+stella/

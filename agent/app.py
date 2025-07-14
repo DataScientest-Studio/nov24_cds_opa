@@ -12,7 +12,6 @@ st.set_page_config(
 st.title("🚀 Lancement de l'assistant...")
 st.write("Veuillez patienter, redirection en cours vers l'interface de chat.")
 
-# La magie est ici : cette commande change de page automatiquement.
 # Le chemin est relatif au dossier principal.
 if "session_id" in st.session_state:
     st.switch_page("pages/👩🏻_Stella, analyste.py")
