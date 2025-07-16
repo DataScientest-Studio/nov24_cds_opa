@@ -23,3 +23,8 @@ langchain-core==0.3.66
 plotly==6.0.1
 graphviz==0.21
 playwright==1.52.0
+
+# --- Notebooks ---
+nbformat==5.10.4
+pathlib==1.0.1
+kaleido==1.0.0
