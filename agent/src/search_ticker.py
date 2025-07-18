@@ -16,13 +16,26 @@ def search_ticker(company_name: str) -> str:
 
     BASE_URL = "https://financialmodelingprep.com/api/v3/search"
     # On augmente la limite pour avoir plus de choix
-    params = {'query': company_name, 'limit': 10, 'apikey': FMP_API_KEY}
+    params = {'limit': 10, 'apikey': FMP_API_KEY}
 
     try:
+        # Essai 1: Recherche stricte avec un espace pour éviter les correspondances partielles (ex: "Intel" vs "Inteliquent").
+        precise_query = f"{company_name} "
+        params['query'] = precise_query
+        
+        print(f"Tentative de recherche stricte avec : '{precise_query}'")
         response = requests.get(BASE_URL, params=params, timeout=10)
         response.raise_for_status()
-
         results = response.json()
+
+        # Essai 2: Si la recherche stricte ne donne rien, on tente une recherche plus large sans l'espace.
+        if not results:
+            print(f"Recherche stricte sans succès. Tentative de recherche large avec : '{company_name}'")
+            params['query'] = company_name
+            response = requests.get(BASE_URL, params=params, timeout=10)
+            response.raise_for_status()
+            results = response.json()
+
         if not results:
             raise APILimitError(f"Désolé, je n'ai trouvé aucune entreprise correspondant à '{company_name}'.")
         
