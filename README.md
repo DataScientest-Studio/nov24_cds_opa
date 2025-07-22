@@ -72,10 +72,10 @@ Obtention des clefs API
   
 Il est nécessaire d'obtenir plusieurs clef API pour faire fonctionner l'agent :
   
-**Obtenir une clef API OpenRouter**
+**Obtenir une clef API Groq**
   
-OpenRouter est le fournisseur de LLM utilisé :  
-https://openrouter.ai/settings/keys
+Groq est le fournisseur d'inférence LLM utilisé :  
+https://groq.com
   
 **Obtenir une clef API Financial Modeling Prep**
   
