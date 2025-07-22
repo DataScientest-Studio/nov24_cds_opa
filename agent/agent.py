@@ -26,7 +26,7 @@ from src.fetch_data import APILimitError
 from src.chart_theme import stella_theme 
 
 # LangGraph et LangChain
-from langchain_openai import ChatOpenAI
+from langchain_groq import ChatGroq
 from langchain_core.messages import HumanMessage, AIMessage, BaseMessage, ToolMessage, SystemMessage
 from langgraph.graph import StateGraph, END
 from langgraph.graph.message import AnyMessage, add_messages
@@ -49,23 +49,22 @@ from tools import (
     _compare_price_histories_logic
 )
 
-# --- Initalisation du LLM et tracing---
-OPENROUTER_API_BASE = "https://openrouter.ai/api/v1"
-OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY") 
-OPENROUTER_MODEL = "deepseek/deepseek-chat-v3-0324:free"
-LANGSMITH_TRACING=True
-LANGSMITH_ENDPOINT="https://api.smith.langchain.com"
-LANGSMITH_API_KEY=os.getenv("LANGSMITH_API_KEY")
-LANGSMITH_PROJECT="stella"
+# Environment variables and constants
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+GROQ_MODEL = "moonshotai/kimi-k2-instruct"
+LANGSMITH_TRACING = True
+LANGSMITH_ENDPOINT = "https://api.smith.langchain.com"
+LANGSMITH_API_KEY = os.getenv("LANGSMITH_API_KEY")
+LANGSMITH_PROJECT = "stella"
 
-if not OPENROUTER_API_KEY:
-    raise ValueError("OPENROUTER_API_KEY n'a pas été enregistrée comme variable d'environnement.")
+if not GROQ_API_KEY:
+    raise ValueError("GROQ_API_KEY n'a pas été enregistrée comme variable d'environnement.")
 
-llm = ChatOpenAI(
-    model=OPENROUTER_MODEL,
-    api_key=OPENROUTER_API_KEY,
-    base_url=OPENROUTER_API_BASE,
-    temperature=0,
+# Initialize the LLM
+llm = ChatGroq(
+    model=GROQ_MODEL,
+    api_key=GROQ_API_KEY,
+    temperature=0
 )
 
 # Objet AgentState pour stocker et modifier l'état de l'agent entre les nœuds
