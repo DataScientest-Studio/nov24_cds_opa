@@ -83,73 +83,67 @@ class AgentState(TypedDict):
 # --- Prompt système (définition du rôle de l'agent) ---
 system_prompt = """Ton nom est Stella. Tu es une assistante experte financière. Ton but principal est d'aider les utilisateurs en analysant des actions.
 
+**Structure des réponses**
+Tu répondras toujours de manière structurée et claire, en utilisant des balises strong, puces, etc en markdown pour organiser l'information.
+
 **Règle d'Or : Le Contexte est Roi**
 Tu DOIS toujours prendre en compte les messages précédents pour comprendre la demande actuelle. 
 Si un utilisateur demande de modifier ou d'ajouter quelque chose, tu dois te baser sur l'analyse ou le graphique qui vient d'être montré. 
 Ne recommence jamais une analyse de zéro si ce n'est pas explicitement demandé.
 
+**Gestion des Demandes Hors Sujet (Très Important !)**
+Ton domaine d'expertise est STRICTEMENT l'analyse financière des actions.
+Si un utilisateur te pose une question qui n'est pas liée à l'analyse d'actions, à la finance, aux entreprises ou à tes propres capacités (par exemple : "Montre moi le cours de l'or", "Analyse le bitcoin", "raconte-moi une blague", "quelle est la capitale de la France ?", "donne-moi une recette de cuisine"), tu ne DOIS PAS utiliser d'outils.
+Dans ce cas, tu dois répondre directement et poliment que ce n'est pas dans ton domaine de compétence, et rappeler ce que tu peux faire.
+
+**Capacités et Limites des Données (Information Cruciale)**
+Tu dois impérativement comprendre et respecter ces deux règles :
+1.  **Analyse Fondamentale (métriques comme ROE, dette, revenus) :** Cette analyse est **UNIQUEMENT DISPONIBLE POUR LES ACTIONS AMÉRICAINES** (cotées sur le NYSE, NASDAQ, etc.). Si on te demande une analyse fondamentale sur une action européenne ou asiatique (ex: LVMH, Samsung, Crédit Agricole), tu dois poliment décliner en expliquant que cette fonctionnalité est limitée aux actions américaines, mais que tu peux tout de même afficher son cours de bourse.
+2.  **Analyse du Cours de Bourse (prix de l'action) :** Cette analyse est **DISPONIBLE POUR LES MARCHÉS MONDIAUX** (Europe, Asie, Amériques). Tu peux afficher et comparer les graphiques de prix pour n'importe quelle action, à condition d'avoir le bon ticker (ex: `AIR.PA` pour Airbus, `005930.KS` pour Samsung).
+
 **Liste des outils disponibles**
-1. `search_ticker`: Recherche le ticker boursier d'une entreprise à partir de son nom.
-2. `fetch_data`: Récupère les données financières fondamentales pour un ticker boursier donné.
-3. `preprocess_data`: Prépare et nettoie les données financières récupérées pour la prédiction. A utiliser si on demande les données nettoyées, pré-traitées, etc...
-4. `analyze_risks`: Prédit la performance d'une action par rapport au marché en se basant sur les données prétraitées. Ne prend en compte que les signaux négatifs extrêmes(risques de sous-performance).
-5. `display_price_chart`: Affiche un graphique de l'évolution du prix (cours) d'une action. A utiliser si on demande "le prix", "le cours", "graphique de l'action", etc. 
-6. `display_raw_data`: Affiche le tableau de données financières brutes qui ont été initialement récupérées.
-7. `display_processed_data`: Affiche le tableau de données financières traitées et nettoyées, prêtes pour l'analyse.
-8. `create_dynamic_chart`: Crée un graphique interactif basé sur les données financières prétraitées.
-9. `get_stock_news`: Récupère les dernières actualités pour un ticker donné.
-10. `get_company_profile`: Récupère le profil d'une entreprise, incluant des informations clés comme le nom, le secteur, l'industrie, le CEO, etc.
-11. `compare_stocks`: Compare plusieurs entreprises sur une métrique financière ou sur leur prix. A utiliser pour toute demande contenant "compare", "vs", "versus".
+1.  `search_ticker`: Recherche le ticker boursier d'une entreprise à partir de son nom.
+2.  `fetch_data`: Récupère les données financières fondamentales pour un ticker. **RAPPEL : Ne fonctionne que pour les actions américaines.**
+3.  `preprocess_data`: Prépare et nettoie les données financières. **RAPPEL : Ne fonctionne que sur les données américaines.**
+4.  `analyze_risks`: Prédit la performance d'une action. **RAPPEL : Ne fonctionne que sur les données américaines.**
+5.  `display_price_chart`: Affiche un graphique de l'évolution du prix (cours) d'une action. **Fonctionne pour les actions du monde entier.**
+6.  `display_raw_data`: Affiche les données financières brutes. **RAPPEL : Données américaines uniquement.**
+7.  `display_processed_data`: Affiche les données financières traitées. **RAPPEL : Données américaines uniquement.**
+8.  `create_dynamic_chart`: Crée un graphique interactif sur les données fondamentales. **RAPPEL : Données américaines uniquement.**
+9.  `get_stock_news`: Récupère les dernières actualités. **Fonctionne mieux pour les entreprises internationales.**
+10. `get_company_profile`: Récupère le profil d'une entreprise. **Fonctionne pour les entreprises internationales.**
+11. `compare_stocks`: Compare plusieurs entreprises sur une métrique financière ou sur leur prix. **Lis attentivement les instructions ci-dessous pour cet outil.**
 
 Si l'utilisateur te demande comment tu fonctionnes, à quoi tu sers, ou toute autre demande similaire tu n'utiliseras pas d'outils. 
 Tu expliqueras simplement ton rôle et tes fonctionnalités en donnant des exemples de demandes qu'on peut te faire.
 
-**Séquence d'analyse complète**
+**Séquence d'analyse complète (Actions Américaines Uniquement)**
 Quand un utilisateur te demande une analyse complète, tu DOIS suivre cette séquence d'outils :
-1. `search_ticker` si le nom de l'entreprise est donné plutôt que le ticker.
-2. `fetch_data` avec le ticker demandé.
-2. `preprocess_data` pour nettoyer les données.
-3. `analyze_risks` pour obtenir un verdict.
+1.  `search_ticker` si le nom de l'entreprise est donné plutôt que le ticker.
+2.  `fetch_data` avec le ticker demandé.
+3.  `preprocess_data` pour nettoyer les données.
+4.  `analyze_risks` pour obtenir un verdict.
 Ta tâche est considérée comme terminée après l'appel à `analyze_risks`. La réponse finale avec le graphique sera générée automatiquement.
 
 **IDENTIFICATION DU TICKER** 
 Si l'utilisateur donne un nom de société (comme 'Apple' ou 'Microsoft') au lieu d'un ticker (comme 'AAPL' ou 'MSFT'), 
 ta toute première action DOIT être d'utiliser l'outil `search_ticker` pour trouver le ticker correct.
 
-**Analyse et Visualisation Dynamique :**
-Quand un utilisateur te demande de "montrer", "visualiser", ou "comparer" des données spécifiques (par exemple, "montre-moi l'évolution du ROE"), tu DOIS suivre cette séquence :
-
-1.  Si les données ne sont pas encore disponibles, appelle `fetch_data`.
-2.  **Tu DOIS ensuite TOUJOURS appeler `preprocess_data` pour préparer les données pour la visualisation.** C'est une étape non négociable.
-3.  Enfin, appelle `create_dynamic_chart` en utilisant les colonnes des données traitées.
-
-**Instructions pour `create_dynamic_chart` :**
-L'outil `create_dynamic_chart` ne fonctionnera QUE si tu respectes les règles suivantes. Toute déviation entraînera une erreur.
-
-1.  **La seule colonne valide pour l'axe du temps (x_column) est `calendarYear`.** L'utilisation de 'date', 'Date', 'year' ou toute autre variation est INTERDITE et provoquera un crash.
-2.  **Les noms des colonnes pour y_column doivent être EXACTEMENT comme dans cette liste :** `marketCap`, `marginProfit`, `roe`, `roic`, `revenuePerShare`, `debtToEquity`, `revenuePerShare_YoY_Growth`, `earningsYield`. N'utilise JAMAIS de majuscules ou d'espaces (ex: utilise `marketCap`, pas `Market Cap`).
-3.  Pour l'argument `y_column`, utilise le nom exact de la métrique demandée par l'utilisateur (par exemple, `roe`, `marginProfit`).
-4.  Choisis le `chart_type` le plus pertinent : `line` pour une évolution dans le temps, `bar` pour une comparaison.
-5.  Si les données ne sont pas encore disponibles, appelle d'abord `fetch_data`.
-
-**Logique de Prédiction :**
-- Si `analyze_risks` renvoie "Risque Élevé Détecté", présente cela comme un avertissement clair.
-- Si `analyze_risks` renvoie "Aucun Risque Extrême Détecté", explique que cela n'est PAS une recommandation d'achat, mais simplement l'absence de signaux de danger majeurs.
-
-**Actualités :**
-Si l'utilisateur demande "les nouvelles", "les actualités" ou "ce qui se passe" pour une entreprise, utilise l'outil `get_stock_news`. 
-Tu peux aussi proposer de le faire après une analyse complète.
-
-**Profil de l'entreprise :**
-Si l'utilisateur demande "le profil", "des informations", "une présentation" ou autre demande similaire pour une entreprise, utilise l'outil `get_company_profile`. 
-Tu peux aussi proposer de le faire après une analyse complète.
+**Analyse et Visualisation Dynamique (Actions Américaines Uniquement) :**
+Quand un utilisateur te demande de "montrer", "visualiser" des données spécifiques (par exemple, "montre-moi l'évolution du ROE"), tu DOIS suivre cette séquence :
+1.  Appelle `fetch_data`.
+2.  Appelle `preprocess_data`.
+3.  Appelle `create_dynamic_chart`.
 
 **Analyse Comparative :**
 Quand l'utilisateur demande de comparer plusieurs entreprises (ex: "compare le ROE de Google et Apple" ou "performance de l'action de MSFT vs GOOGL"), tu DOIS :
-1.  Si les tickers ne sont pas donnés, utilise `search_ticker` pour chaque nom d'entreprise.
-2.  Utilise l'outil `compare_stocks` en fournissant la liste des tickers et la métrique demandée.
-    - Pour une métrique financière (ROE, dette, etc.), utilise `comparison_type='fundamental'`. Cela affichera toujours l'évolution dans le temps.
-    - Pour une comparaison de performance de l'action, utilise `metric='price'` et `comparison_type='price'`.
+1.  **Identifier le type de comparaison :**
+    *   Si la métrique est 'price' (prix, cours, performance de l'action), c'est une **comparaison de PRIX**. Elle fonctionne pour TOUTES les actions.
+    *   Si la métrique est fondamentale (ROE, dette, marketCap, etc.), c'est une **comparaison FONDAMENTALE**. Elle ne fonctionne que pour les actions AMÉRICAINES. Si l'une des actions n'est pas américaine, tu dois refuser la comparaison et expliquer pourquoi, en proposant de comparer leur prix à la place.
+2.  Si les tickers ne sont pas donnés, utilise `search_ticker` pour chaque nom d'entreprise.
+3.  Utilise l'outil `compare_stocks` en conséquence :
+    *   Pour une comparaison **fondamentale** (américaine uniquement) : `comparison_type='fundamental'`, `metric='roe'` (par exemple).
+    *   Pour une comparaison de **prix** (mondiale) : `comparison_type='price'`, `metric='price'`.
 
 **Gestion des Questions de Suivi (Très Important !)**
 
@@ -160,9 +154,6 @@ Quand l'utilisateur demande de comparer plusieurs entreprises (ex: "compare le R
     *Ex: L'agent montre un graphique sur 1 an. L'utilisateur dit "montre sur 5 ans". L'agent doit rappeler le même outil avec `period_days=1260`.*
 
 *   **Pour le NASDAQ 100**: Utilise le ticker de l'ETF `QQQ`. Pour le S&P 500, utilise `SPY`. Si l'utilisateur mentionne un indice, ajoute son ticker à la liste pour la comparaison de prix.
-
-**Note sur les actions internationales**: Pour les graphiques de prix des actions européennes ou asiatiques, je fonctionne mieux si tu me donnes le ticker complet avec son suffixe de marché (ex: "AIR.PA" pour Airbus, "005930.KS" pour Samsung). 
-L'analyse fondamentale complète reste limitée aux actions américaines.
 
 Lorsuqe tu écris un ticker, entoure le toujours de backticks (``) pour le mettre en valeur. (ex: `AAPL`).
 Tu dois toujours répondre en français et tutoyer ton interlocuteur.
@@ -208,7 +199,7 @@ def agent_node(state: AgentState):
     # On invoque le LLM avec la liste de messages complète
     # Cette liste est locale et ne modifie pas l'état directement
     response = llm.bind_tools(available_tools).invoke(current_messages)
-    
+    print(f"response.content: {response.content}")
     return {"messages": [response]}
 
 # Noeud 2 : execute_tool_node, exécute les outils en se basant sur la décision de l'agent_node (Noeud 1).
@@ -383,7 +374,7 @@ def execute_tool_node(state: AgentState):
         except Exception as e:
             # Bloc de capture générique pour toutes les autres erreurs
             error_msg = f"Erreur lors de l'exécution de l'outil '{tool_name}': {repr(e)}"
-            tool_outputs.append(ToolMessage(tool_call_id=tool_id, content=json.dumps({"error": error_msg})))
+            tool_outputs.append(ToolMessage(tool_call_id=tool_id, content=f"[ERREUR: {error_msg}]"))
             current_state_updates["error"] = error_msg
             print(error_msg)
             
@@ -492,7 +483,7 @@ def generate_final_response_node(state: AgentState):
                     ),
                     yaxis2=dict(
                         title=dict(
-                            text='Rendement des Bénéfices (inverse du P/E)',
+                            text='Rendement bénéficiaire (inverse du P/E)',
                             font=dict(color=stella_theme['colors'][0]) 
                         ),
                         tickfont=dict(color=stella_theme['colors'][0]),
@@ -526,7 +517,7 @@ def generate_final_response_node(state: AgentState):
                     *   🟣 **La ligne violette (Croissance)** : Elle montre la tendance de la croissance du chiffre d'affaires. Une courbe ascendante indique une accélération.
                     *   🟢 **La ligne verte (Valorisation)** : Elle représente le rendement des bénéfices (l'inverse du fameux P/E Ratio). **Plus cette ligne est haute, plus l'action est considérée comme "bon marché"** par rapport à ses profits. Une ligne basse indique une action "chère".
 
-                    **L'analyse clé :** Idéalement, on recherche une croissance qui accélère (ligne orange qui monte) avec une valorisation qui reste raisonnable (ligne violette stable ou qui monte). Une croissance qui ralentit (ligne orange qui plonge) alors que l'action devient plus chère (ligne violette qui plonge) est souvent un signal de prudence.
+                    **L'analyse clé :** Idéalement, on recherche une croissance qui accélère (ligne 🟣 qui monte) avec une valorisation qui reste raisonnable (ligne 🟢 stable ou qui monte). Une croissance qui ralentit (ligne 🟣 qui plonge) alors que l'action devient plus chère (ligne 🟢 qui plonge) est souvent un signal de prudence.
                 """)
             else:
                 response_content += "\n\n(Impossible de générer le graphique de synthèse Croissance/Valorisation : données ou colonnes manquantes)."
@@ -632,11 +623,11 @@ def prepare_profile_display_node(state: AgentState):
         final_message = AIMessage(content="Désolé, je n'ai pas pu récupérer le profil de l'entreprise.")
         return {"messages": [final_message]}
 
-    # Le LLM va générer une phrase d'introduction sympa. On lui passe juste le contenu.
     prompt = f"""
     Voici les informations de profil pour une entreprise au format JSON :
     {tool_message.content}
-    
+    **INFORMATION CRUCIALE :**
+    TU DOIS rédiger une réponse formatée en markdown pour présenter ces informations à l'utilisateur.
     Rédige une réponse la plus exhaustive et agréable possible pour présenter ces informations à l'utilisateur.
     Mets en avant le nom de l'entreprise, son secteur et son CEO, mais n'omet aucune information qui n'est pas null dans le JSON.
     Tu n'afficheras pas l'image du logo, l'UI s'en chargera, et tu n'as pas besoin de la mentionner.
@@ -646,13 +637,38 @@ def prepare_profile_display_node(state: AgentState):
     Termine en donnant le lien vers leur site web.
     """
     response = llm.invoke(prompt)
-    
+    print(f"response.content: {response.content}")
     final_message = AIMessage(content=response.content)
     
     # On attache le JSON pour que le front-end puisse afficher l'image du logo !
     setattr(final_message, 'profile_json', tool_message.content)
     
     return {"messages": [final_message]}
+
+# Noeud de gestion des erreurs
+def handle_error_node(state: AgentState):
+    """
+    Génère un message d'erreur clair pour l'utilisateur, puis prépare le nettoyage de l'état.
+    Ce noeud est appelé par le routeur chaque fois que le champ 'error' est rempli.
+    """
+    print("\n--- AGENT: Gestion de l'erreur... ---")
+    error_message = state.get("error", "Une erreur inconnue est survenue.")
+    
+    # On crée une réponse claire et formatée pour l'utilisateur.
+    user_facing_error = textwrap.dedent(f"""
+        Désolé, une erreur est survenue et je n'ai pas pu terminer ta demande.
+        
+        **Détail de l'erreur :**
+        ```
+        {error_message}
+        ```
+        
+        Peux-tu essayer de reformuler ta question ou tenter une autre action ?
+    """)
+    
+    # On met cette réponse dans un AIMessage qui sera affiché dans le chat.
+    # L'étape suivante sera le nettoyage de l'état.
+    return {"messages": [AIMessage(content=user_facing_error)]}
 
 # --- Router pour diriger le flux du graph ---
 def router(state: AgentState) -> str:
@@ -664,8 +680,8 @@ def router(state: AgentState) -> str:
     
     # Y a-t-il une erreur ? C'est la priorité absolue.
     if state.get("error"):
-        print("Routeur -> Décision: Erreur détectée, fin du processus.")
-        return END
+        print("Routeur -> Décision: Erreur détectée, passage au gestionnaire d'erreurs.")
+        return "handle_error"
 
     # Le dernier message est-il une décision de l'IA d'appeler un outil ?
     last_message = messages[-1]
@@ -724,10 +740,11 @@ workflow.add_node("prepare_data_display", prepare_data_display_node)
 workflow.add_node("prepare_chart_display", prepare_chart_display_node)
 workflow.add_node("prepare_news_display", prepare_news_display_node)
 workflow.add_node("prepare_profile_display", prepare_profile_display_node)
+workflow.add_node("handle_error", handle_error_node)
 
 workflow.set_entry_point("agent")
 
-workflow.add_conditional_edges("agent", router, {"execute_tool": "execute_tool", "__end__": END})
+workflow.add_conditional_edges("agent", router, {"execute_tool": "execute_tool", "handle_error": "handle_error", "__end__": END})
 workflow.add_conditional_edges(
     "execute_tool",
     router,
@@ -738,6 +755,7 @@ workflow.add_conditional_edges(
         "prepare_chart_display": "prepare_chart_display",
         "prepare_news_display": "prepare_news_display", 
         "prepare_profile_display": "prepare_profile_display",
+        "handle_error": "handle_error",
         "__end__": END
     }
 )
@@ -748,6 +766,7 @@ workflow.add_edge("prepare_profile_display", "cleanup_state")
 workflow.add_edge("prepare_data_display", "cleanup_state")
 workflow.add_edge("prepare_chart_display", "cleanup_state")
 workflow.add_edge("prepare_news_display", "cleanup_state")
+workflow.add_edge("handle_error", "cleanup_state")
 
 # Après le nettoyage, le cycle est vraiment terminé.
 workflow.add_edge("cleanup_state", END)
@@ -809,20 +828,25 @@ def generate_trace_animation_frames(thread_id: str):
             print("--- VISUALIZER: Aucune exécution trouvée pour cet ID de thread.")
             return []
 
+        # Find the main thread run (root run)
         thread_run = next((r for r in all_runs if not r.parent_run_id), None)
         if not thread_run:
             print("--- VISUALIZER: Exécution principale du thread introuvable.")
             return []
 
+        # Get node-level runs, sorted by start time
         trace_nodes_runs = sorted(
             [r for r in all_runs if r.parent_run_id == thread_run.id],
             key=lambda r: r.start_time
         )
 
-        trace_node_names = [run.name for run in trace_nodes_runs]
-        full_trace_path = ["__start__"] + trace_node_names + ["__end__"]
+        # Build the full trace path, including start and end
+        # This list directly maps to the order of runs in trace_nodes_runs
+        # The index in trace_nodes_runs will be (index in full_trace_path - 1)
+        full_trace_path_names = [run.name for run in trace_nodes_runs]
+        full_trace_path = ["__start__"] + full_trace_path_names + ["__end__"]
 
-        if not trace_node_names:
+        if not trace_nodes_runs:
             print("--- VISUALIZER: Aucun noeud enfant (étape) trouvé dans la trace.")
             return []
 
@@ -831,10 +855,19 @@ def generate_trace_animation_frames(thread_id: str):
         graph_json = app.get_graph().to_json()
         
         frames = []
-        previous_node = full_trace_path[0]
-        initial_node_name = full_trace_path[0]
+        previous_node_in_trace = full_trace_path[0] # This tracks the previous node *in the path*, not graphviz node id
+        
+        # Create a mapping from node_id in graph_json to its original label for efficiency
+        node_labels_map = {}
+        for node in graph_json["nodes"]:
+            node_labels_map[node["id"]] = node["data"]["name"] if "data" in node and "name" in node["data"] else node["id"]
 
-        for i, node_name in enumerate(full_trace_path):
+
+        for i, current_node_name_in_trace in enumerate(full_trace_path):
+            # The node ID in Graphviz will be the same as the run.name for actual nodes
+            # For __start__ and __end__, they are special
+            node_id_to_highlight = current_node_name_in_trace
+
             # --- 2. CONSTRUCTION DU DOT STRING AVEC STYLE ---
             
             # Attributs globaux pour le graphe
@@ -850,16 +883,35 @@ def generate_trace_animation_frames(thread_id: str):
             ]
             
             # Ajout des noeuds
-            for node in graph_json["nodes"]:
-                node_id = node["id"]
-                label = node["data"]["name"] if "data" in node and "name" in node["data"] else node_id
-                
-                # Appliquer le style de surbrillance si c'est le noeud actif
-                if node_id == node_name:
+            for node_in_graph_def in graph_json["nodes"]: 
+                node_id_from_graph_def = node_in_graph_def["id"]
+                display_label = node_labels_map[node_id_from_graph_def] 
+
+                if node_id_from_graph_def == current_node_name_in_trace:
+                    # Appliquer le libellé personnalisé pour 'execute_tool' UNIQUEMENT s'il est le nœud mis en évidence
+                    if node_id_from_graph_def == "execute_tool":
+                        # Le Run object correspondant est trace_nodes_runs[i-1] car full_trace_path inclut __start__ au début.
+                        # On s'assure que l'index est valide pour trace_nodes_runs
+                        if i > 0 and i <= len(trace_nodes_runs): 
+                            specific_run = trace_nodes_runs[i-1]
+                            if specific_run.name == "execute_tool": # Double vérification que le nom correspond bien
+                                if specific_run.inputs and 'messages' in specific_run.inputs:
+                                    # Parcourir les messages d'entrée en sens inverse pour trouver le dernier AIMessage avec tool_calls
+                                    for msg_dict in reversed(specific_run.inputs['messages']):
+                                        # Les messages dans LangSmith Run.inputs sont des dictionnaires
+                                        if isinstance(msg_dict, dict) and msg_dict.get('type') == 'ai' and msg_dict.get('tool_calls'):
+                                            first_tool_call = msg_dict['tool_calls'][0] # On prend le premier tool_call (souvent le seul)
+                                            tool_name = first_tool_call['name']
+                                            display_label = f"execute_tool : {tool_name}" # Surcharge le libellé
+                                            break
+                        else:
+                             print(f"Warning: Index de trace ({i}) hors limites ou nœud spécial pour {node_id_from_graph_def}")
+
+
                     highlight_attrs = ' '.join([f'{k}="{v}"' for k, v in style_config["highlight"].items() if 'edge' not in k])
-                    dot_lines.append(f'  "{node_id}" [label="{label}", {highlight_attrs}];')
+                    dot_lines.append(f'  "{node_id_from_graph_def}" [label="{display_label}", {highlight_attrs}];')
                 else:
-                    dot_lines.append(f'  "{node_id}" [label="{label}"];')
+                    dot_lines.append(f'  "{node_id_from_graph_def}" [label="{display_label}"];') # Utilise le libellé original pour les nœuds non surlignés
             
             # Ajout des arêtes
             for edge in graph_json["edges"]:
@@ -867,7 +919,7 @@ def generate_trace_animation_frames(thread_id: str):
                 target = edge["target"]
                 
                 # Appliquer le style de surbrillance si c'est l'arête active
-                if source == previous_node and target == node_name:
+                if source == previous_node_in_trace and target == current_node_name_in_trace:
                     dot_lines.append(f'  "{source}" -> "{target}" [color="{style_config["highlight"]["edge_color"]}", penwidth=2.5];')
                 else:
                     dot_lines.append(f'  "{source}" -> "{target}";')
@@ -878,14 +930,14 @@ def generate_trace_animation_frames(thread_id: str):
             g = graphviz.Source(modified_dot)
             png_bytes = g.pipe(format='png')
 
-            step_description = f"Step {i+1}: Transition vers le noeud '{node_name}'"
+            step_description = f"Step {i+1}: Transition vers le noeud '{current_node_name_in_trace}'"
             if i == 0:
                 step_description = "Step 1: Début de l'exécution"
             elif i == len(full_trace_path) - 1:
                 step_description = f"Step {i+1}: Fin de l'exécution"
             frames.append((step_description, png_bytes))
 
-            previous_node = node_name
+            previous_node_in_trace = current_node_name_in_trace
 
         return frames
 
