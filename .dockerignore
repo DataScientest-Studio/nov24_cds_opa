@@ -1,0 +1,6 @@
+notebooks/
+.venv/
+venv/
+agent/__pycache__/
+agent/src/__pycache__/
+agent_workflow.png
