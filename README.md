@@ -84,6 +84,7 @@ NewsAPI fournit les news liés aux entreprises :
 https://newsapi.org
   
 **Obtenir une clef API LangSmith**
+  
 LangSmith permet de tracer l'agent et visualiser ce qu'il se passe dans l'application : 
 https://smith.langchain.com/
   

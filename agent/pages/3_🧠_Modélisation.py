@@ -1,4 +1,4 @@
-# Page Modélisation de l'app Streamlit : 
+# Page Modélisation 
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -13,10 +13,9 @@ import warnings
 warnings.filterwarnings('ignore')
 
 
-# --- Page Configuration ---
 st.set_page_config(page_title="Modélisation du Risque", layout="wide")
 
-# --- Définition des paramètres du meilleur modèle (à modifier si nécessaire) ---
+# --- Définition des paramètres du meilleur modèle ---
 OPTIMAL_PARAMS = {
     'n_estimators': 134,
     'max_depth': 10,
@@ -33,12 +32,12 @@ if 'hyperparams' not in st.session_state:
 if 'reset_counter' not in st.session_state:
     st.session_state.reset_counter = 0
 
-# --- Callback function for the reset button ---
+# --- Fonction callback pour le bouton reset ---
 def reset_to_optimal():
     """Réinitialise les hyperparamètres dans session_state aux valeurs optimales."""
     st.session_state.hyperparams = OPTIMAL_PARAMS.copy()
 
-# --- UI & Project Storytelling ---
+# --- Section header ---
 st.title("🧠 Modélisation Interactive : De la Prédiction au Filtrage de Risque")
 st.markdown("""
 Cette page interactive vous emmène au cœur de la partie Modélisation du projet. L'objectif initial : prédire si une action du NASDAQ 100 allait **surperformer le marché (Classe 1)** ou **sous-performer (Classe 0)** en se basant uniquement sur ses données financières fondamentales.
@@ -52,7 +51,7 @@ Nous avons donc réorienté notre stratégie. Cet outil n'est pas un preneur de 
 """)
 st.info("Ajustez les paramètres, entraînez le modèle, ou cliquez sur 'Réinitialiser' pour revenir à notre configuration la plus performante.")
 
-# --- Data Loading and Caching ---
+# --- Loading de la donnée ---
 DATA_PATH = 'notebooks/csv/N100_fundamentals_v3.csv'
 
 @st.cache_data
@@ -88,7 +87,7 @@ def load_and_prep_data(path):
     X_test = X_test.drop('target', axis=1)
     return X_train, y_train, X_test, y_test
 
-# --- Helper Functions (inchangées) ---
+# --- Fonctions helper ---
 def create_plotly_confusion_matrix(cm, title, colorscale):
     labels = ['Classe 0 (Sous-perf.)', 'Classe 1 (Sur-perf.)']
     fig = px.imshow(cm, labels=dict(x="Prédiction", y="Vraie Valeur", color="Nombre"), x=labels, y=labels,
@@ -106,13 +105,12 @@ def get_shap_explanation(_model, _data_to_explain):
     explainer = shap.TreeExplainer(_model)
     return explainer(_data_to_explain)
 
-# --- Main App Logic ---
+# --- Logique principale de la page ---
 X_train, y_train, X_test, y_test = load_and_prep_data(DATA_PATH)
 if X_train is None:
     st.stop()
 
-# --- Hyperparameter Configuration with Form ---
-# Section corrigée pour les hyperparamètres
+# Section pour les hyperparamètres
 st.header("⚙️ Configuration des Hyperparamètres")
 st.info("Ajustez les hyperparamètres pour voir leur impact sur la performance. Un modèle plus complexe est-il toujours meilleur ?")
 
@@ -192,8 +190,7 @@ if 'model_trained' not in st.session_state:
     st.info("Veuillez cliquer sur 'Entraîner le Modèle' pour commencer l'analyse.")
     st.stop()
 
-# --- Le reste du code est inchangé ---
-# --- Global Performance ---
+# --- Performance Globale ---
 st.header("📊 Résultats Globaux sur l'Ensemble de Test (Année 2023)")
 st.info("Analysez la performance globale. Observez la différence de précision et de rappel entre la **Classe 0 (Sous-performance)** et la **Classe 1 (Surperformance)**. Le modèle est-il plus doué pour l'une que pour l'autre ?")
 with st.container(border=True):
@@ -221,7 +218,7 @@ with st.container(border=True):
 
 st.divider()
 
-# --- High-Confidence Analysis ---
+# --- Analyse Haute-Confiance ---
 
 st.header("🎯 Le Cœur de la Stratégie : Le Filtrage par la Confiance")
 st.info("""
@@ -253,7 +250,7 @@ if 'high_confidence_df' in locals() and not high_confidence_df.empty:
         st.plotly_chart(create_plotly_confusion_matrix(cm_hc, f'Matrice de Confusion (Confiance > {confidence_threshold:.0%})', "Greens"), use_container_width=True)
 st.divider()
 
-# --- SHAP Analysis for High-Confidence Errors ---
+# --- Analyse SHAP ---
 st.header("🕵️ Analyse SHAP : Comprendre l'Archétype de l'Entreprise à Risque")
 st.markdown("""
 Même un bon modèle fait des erreurs. L'analyse SHAP nous permet de les disséquer pour comprendre **pourquoi** le modèle s'est trompé sur les cas les plus difficiles (les erreurs à haute confiance). 
@@ -263,15 +260,14 @@ Cela nous aide à définir l'**archétype de l'entreprise à risque** que le mod
 high_confidence_incorrect_df = high_confidence_df[high_confidence_df['is_correct'] == 0] if 'high_confidence_df' in locals() else pd.DataFrame()
 
 if not high_confidence_incorrect_df.empty:
-    # (Le reste du code SHAP est inchangé)
     st.warning(f"**{len(high_confidence_incorrect_df)}** erreur(s) trouvée(s) avec une confiance > {confidence_threshold:.0%}. Analyse en cours...")
     X_to_explain = X_test.loc[high_confidence_incorrect_df.index]
     
-    # Create a unique cache key based on the current set of errors
+    # Création d'une clé de cache unique pour les valeurs SHAP
     error_indices_sorted = sorted(high_confidence_incorrect_df.index.astype(str))
     cache_key = f"shap_{confidence_threshold}_{hash(tuple(error_indices_sorted))}"
     
-    # Check if we need to recalculate SHAP values
+    # Check si les valeurs SHAP sont déjà en cache
     if (not hasattr(st.session_state, 'current_shap_key') or 
         st.session_state.current_shap_key != cache_key):
         
@@ -282,10 +278,10 @@ if not high_confidence_incorrect_df.empty:
     
     shap_explanation = st.session_state.current_shap_explanation
     
-    # Verify that our cached data matches the current selection
+    # Vérifie si les indices de X_to_explain correspondent à ceux déjà en cache
     if (hasattr(st.session_state, 'current_x_indices') and 
         st.session_state.current_x_indices != list(X_to_explain.index)):
-        # Force recalculation if indices don't match
+        # Force le recalcul des valeurs SHAP si les indices ne correspondent pas
         with st.spinner("Recalcul des valeurs SHAP..."):
             st.session_state.current_shap_explanation = get_shap_explanation(st.session_state.model, X_to_explain)
             st.session_state.current_shap_key = cache_key
