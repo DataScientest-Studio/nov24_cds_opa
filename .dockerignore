@@ -1,6 +1,41 @@
-notebooks/
-.venv/
+# Ignorer le cache Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Ignorer les environnements virtuels
 venv/
-agent/__pycache__/
-agent/src/__pycache__/
+.venv/
+
+# Ignorer les fichiers GIT
+.git/
+.gitignore
+
+# Ignorer les notebooks et les données inutilisées
+*.ipynb
+*.csv
+*.tsv
+*.parquet
+*.xlsx
+*.xls
+*.log
+reports/
+
+# Ignorer les fichiers OS
+.DS_Store
+Thumbs.db
+
+# Ignorer les images et autres fichiers
+*.jpg
+*.jpeg
+*.gif
+.env.example
+.gitignore
 agent_workflow.png
+LICENSE
+README.md
+notebooks/
+
+# Garder les données
+!notebooks/csv/N100_fundamentals_v3.csv
