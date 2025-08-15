@@ -20,7 +20,6 @@ venv/
 *.xlsx
 *.xls
 *.log
-reports/
 
 # Ignorer les fichiers OS
 .DS_Store

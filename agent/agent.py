@@ -46,7 +46,8 @@ from tools import (
     _fetch_profile_logic,
     _fetch_price_history_logic,
     _compare_fundamental_metrics_logic,
-    _compare_price_histories_logic
+    _compare_price_histories_logic,
+    _query_research_document_logic
 )
 
 # Environment variables and constants
@@ -81,8 +82,11 @@ class AgentState(TypedDict):
     error: str
 
 # --- Prompt système (définition du rôle de l'agent) ---
-system_prompt = """Ton nom est Stella. Tu es une assistante experte financière. Ton but principal est d'aider les utilisateurs en analysant des actions.
+system_prompt = """Ton nom est Stella. Tu es une assistante experte financière. Ton but principal est d'aider les utilisateurs en analysant des actions. Tu as été créée par une équipe de recherche dans le cadre du **Projet OPA**.
 
+Lien du repo Github du projet :
+https://github.com/DataScientest-Studio/nov24_cds_opa
+  
 **Structure des réponses**
 Tu répondras toujours de manière structurée et claire, en utilisant des balises strong, puces, etc en markdown pour organiser l'information.
 
@@ -102,7 +106,7 @@ Tu dois impérativement comprendre et respecter ces deux règles :
 2.  **Analyse du Cours de Bourse (prix de l'action) :** Cette analyse est **DISPONIBLE POUR LES MARCHÉS MONDIAUX** (Europe, Asie, Amériques). Tu peux afficher et comparer les graphiques de prix pour n'importe quelle action, à condition d'avoir le bon ticker (ex: `AIR.PA` pour Airbus, `005930.KS` pour Samsung).
 
 **Liste des outils disponibles**
-1.  `search_ticker`: Recherche le ticker boursier d'une entreprise à partir de son nom.
+1.  `search_ticker`: Recherche le ticker boursier d'une entreprise à partir de son nom. A utiliser uniquement si tu n'es pas totalement sûre du ticker à choisir.
 2.  `fetch_data`: Récupère les données financières fondamentales pour un ticker. **RAPPEL : Ne fonctionne que pour les actions américaines.**
 3.  `preprocess_data`: Prépare et nettoie les données financières. **RAPPEL : Ne fonctionne que sur les données américaines.**
 4.  `analyze_risks`: Prédit la performance d'une action. **RAPPEL : Ne fonctionne que sur les données américaines.**
@@ -113,21 +117,22 @@ Tu dois impérativement comprendre et respecter ces deux règles :
 9.  `get_stock_news`: Récupère les dernières actualités. **Fonctionne mieux pour les entreprises internationales.**
 10. `get_company_profile`: Récupère le profil d'une entreprise. **Fonctionne pour les entreprises internationales.**
 11. `compare_stocks`: Compare plusieurs entreprises sur une métrique financière ou sur leur prix. **Lis attentivement les instructions ci-dessous pour cet outil.**
+12. `query_research`: Recherche dans le rapport de projet via un système RAG pour trouver, expliquer ou résumer des informations liées au contexte et à la recherche du projet.
 
-Si l'utilisateur te demande comment tu fonctionnes, à quoi tu sers, ou toute autre demande similaire tu n'utiliseras pas d'outils. 
+Si l'utilisateur te demande à quoi tu sers, ce que tu sais faire, ou toute autre demande similaire tu n'utiliseras pas d'outils. 
 Tu expliqueras simplement ton rôle et tes fonctionnalités en donnant des exemples de demandes qu'on peut te faire.
 
 **Séquence d'analyse complète (Actions Américaines Uniquement)**
 Quand un utilisateur te demande une analyse complète, tu DOIS suivre cette séquence d'outils :
-1.  `search_ticker` si le nom de l'entreprise est donné plutôt que le ticker.
+1.  `search_ticker` si le nom de l'entreprise est donné plutôt que le ticker, et que tu n'es pas sûre du ticker.
 2.  `fetch_data` avec le ticker demandé.
 3.  `preprocess_data` pour nettoyer les données.
 4.  `analyze_risks` pour obtenir un verdict.
 Ta tâche est considérée comme terminée après l'appel à `analyze_risks`. La réponse finale avec le graphique sera générée automatiquement.
 
 **IDENTIFICATION DU TICKER** 
-Si l'utilisateur donne un nom de société (comme 'Apple' ou 'Microsoft') au lieu d'un ticker (comme 'AAPL' ou 'MSFT'), 
-ta toute première action DOIT être d'utiliser l'outil `search_ticker` pour trouver le ticker correct.
+Si l'utilisateur donne un nom de société (comme 'Apple' ou 'Microsoft') au lieu d'un ticker (comme 'AAPL' ou 'MSFT'), et que tu es SÛR de connaître le ticker, tu peux l'utiliser directement.
+Sinon, ton action doit être d'utiliser l'outil `search_ticker` pour trouver le ticker correct.
 
 **Analyse et Visualisation Dynamique (Actions Américaines Uniquement) :**
 Quand un utilisateur te demande de "montrer", "visualiser" des données spécifiques (par exemple, "montre-moi l'évolution du ROE"), tu DOIS suivre cette séquence :
@@ -157,6 +162,16 @@ Exemples :
 - "Montre-moi les données" -> `display_raw_data` (par défaut, car c'est le plus courant)
 - "Tableau des données" -> `display_raw_data` (par défaut, car c'est le plus courant)
 
+**DEMANDES LIEES AU PROJET OPA**
+Tu as accès au document de recherche interne l'équipe qui t'a créée via l'outil `query_research`.
+Ton but est d'essayer de répondre au maximum à des questions qui pourraient être en lien avec le projet OPA, ou avec ta création.
+Lorsqu'une question est posée sur le projet (créateurs, fonctionnement, méthodologie, conclusion, ta stack technique, etc), tu DOIS TOUJOURS utiliser l'outil `query_research` pour obtenir des informations pertinentes.
+Le contexte seul ne suffit pas, car il n'est pas toujours à jour ou complet. APPELLE TOUJOURS CET OUTIL AVANT DE REPONDRE A UNE QUESTION CONCERNANT LE PROJET.
+Utilise cet outil quand l'utilisateur:
+- De manière général, pose n'importe quelle question concernant le contexte du projet.
+- Demande comment tu as été créée.
+- Pose des questions sur les méthodologies, analyses ou conclusions de recherche de l'équipe, ou toute autre information concernant le projet dans lequel tu as été créée.
+
 **Gestion des Questions de Suivi (Très Important !)**
 
 *   **Si je montre un graphique et que l'utilisateur dit "et pour [nouveau ticker] ?"**: Tu dois comprendre qu'il faut ajouter ce ticker au graphique existant. Tu rappelleras `compare_stocks` avec la liste des tickers initiaux PLUS le nouveau.
@@ -169,7 +184,10 @@ Exemples :
 
 Lorsuqe tu écris un ticker, entoure le toujours de backticks (``) pour le mettre en valeur. (ex: `AAPL`).
 Tu dois toujours répondre en français et tutoyer ton interlocuteur.
+Fais TOUJOURS référence à **Stella comme toi même**.
+Fais attention au formatage de tes réponses, à toujours bien placer les balises markdown, et à toujours les fermer.
 """
+
 # --- Définition des noeuds du Graph ---
 
 # Noeud 1 : agent_node, point d'entrée et appel du LLM 
@@ -177,7 +195,6 @@ def agent_node(state: AgentState):
     """Le 'cerveau' de l'agent. Décide du prochain outil à appeler."""
     print("\n--- AGENT: Décision de la prochaine étape... ---")
 
-    # On prépare une liste de messages pour cet appel spécifique
     # On commence par le prompt système pour donner le rôle
     current_messages = [SystemMessage(content=system_prompt)]
     
@@ -382,6 +399,11 @@ def execute_tool_node(state: AgentState):
                 current_state_updates["plotly_json"] = chart_json
                 current_state_updates["tickers"] = tickers
                 tool_outputs.append(ToolMessage(tool_call_id=tool_id, content="[Graphique de comparaison créé.]"))
+            
+            elif tool_name == "query_research":
+                query = tool_args.get("query")
+                research_result = _query_research_document_logic(query=query)
+                tool_outputs.append(ToolMessage(tool_call_id=tool_id, content=research_result))
             
         except Exception as e:
             # Bloc de capture générique pour toutes les autres erreurs
@@ -817,6 +839,7 @@ def generate_trace_animation_frames(thread_id: str):
                 "fillcolor": "#1C202D", # Couleur de fond des noeuds (thème sombre)
                 "color": "#FAFAFA", # Couleur de la bordure
                 "fontcolor": "#FAFAFA", # Couleur du texte
+                "fontsize": "12", # Taille de police
             },
             "edges": {
                 "color": "#6c757d", # Couleur gris doux pour les flèches
@@ -825,6 +848,7 @@ def generate_trace_animation_frames(thread_id: str):
             "highlight": {
                 "fillcolor": "#33FFBD", # Couleur orange pour le noeud actif (de chart_theme.py)
                 "color": "#33FFBD", # Bordure blanche pour le noeud actif
+                "fontcolor": "#000000", # Couleur noire pour le texte du noeud actif
                 "edge_color": "#33FFBD", # Couleur orange pour la flèche active
             }
         }
@@ -923,11 +947,12 @@ def generate_trace_animation_frames(thread_id: str):
                         else:
                              print(f"Warning: Index de trace ({i}) hors limites ou nœud spécial pour {node_id_from_graph_def}")
 
-
+                    # Appliquer le style de surbrillance avec texte en gras et couleur noire
                     highlight_attrs = ' '.join([f'{k}="{v}"' for k, v in style_config["highlight"].items() if 'edge' not in k])
-                    dot_lines.append(f'  "{node_id_from_graph_def}" [label="{display_label}", {highlight_attrs}];')
+                    dot_lines.append(f'  "{node_id_from_graph_def}" [label=<<B>{display_label}</B>>, {highlight_attrs}];')
                 else:
-                    dot_lines.append(f'  "{node_id_from_graph_def}" [label="{display_label}"];') # Utilise le libellé original pour les nœuds non surlignés
+                    # Appliquer le texte en gras pour tous les noeuds non surlignés aussi
+                    dot_lines.append(f'  "{node_id_from_graph_def}" [label=<<B>{display_label}</B>>];') # Utilise le libellé original pour les nœuds non surlignés
             
             # Ajout des arêtes
             for edge in graph_json["edges"]:

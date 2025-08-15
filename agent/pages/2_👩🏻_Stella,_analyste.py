@@ -179,7 +179,16 @@ if prompt := st.chat_input("Qu'est ce que je peux faire pour toi aujourd'hui ? �
                     
                     elif tool_name == 'analyze_risks':
                         thinking_placeholder.write("🔮 Je soumets les données à mon modèle de prédiction pour évaluer les risques...")
-
+                    
+                    elif tool_name == 'query_research':
+                        query = tool_args.get('query', 'la question posée')
+                        thinking_placeholder.write(f"📚 Je consulte le rapport de recherche avec : **'{query}'** en tête ! (Cet outil prend plus de temps que les autres)")
+                    
+                    elif tool_name == 'display_raw_data':
+                        thinking_placeholder.write("📋 Je prépare le tableau des données brutes récupérées pour que tu puisses les consulter.")
+                    
+                    elif tool_name == 'display_processed_data':
+                        thinking_placeholder.write("📊 Je prépare le tableau des données traitées et nettoyées, prêtes pour l'analyse.")
                     # --- Outils de visualisation (demandés par l'utilisateur) ---
                     elif tool_name == 'display_price_chart':
                         ticker = tool_args.get('ticker', 'l\'action')

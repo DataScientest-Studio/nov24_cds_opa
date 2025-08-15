@@ -14,3 +14,5 @@ venv/
 stella/
 notebooks/Mathis/.DS_Store
 reports/.DS_Store
+
+chroma_research_db/
